@@ -130,7 +130,7 @@ dt_grid.fit(X_train_resampled, y_train_resampled)
 best_dt = dt_grid.best_estimator_
 print(f"Melhores hiperparâmetros (Decision Tree): {dt_grid.best_params_}")
 print("-" * 50)
-
+'''
 # Grid para SVM (com probabilidade ativada para ROC)
 svm_params = {
     'C': [0.1, 1, 10],
@@ -152,7 +152,7 @@ svm_grid.fit(X_train_resampled, y_train_resampled)
 best_svm = svm_grid.best_estimator_
 print(f"Melhores hiperparâmetros (SVM): {svm_grid.best_params_}")
 print("-" * 50)
-
+'''
 # Naive Bayes (não precisa de ajuste de hiperparâmetros)
 nb_model = GaussianNB()
 nb_model.fit(X_train_resampled, y_train_resampled)
@@ -162,7 +162,7 @@ modelos = {
     "Logistic Regression": best_logreg,
     "KNN": best_knn,
     "Decision Tree": best_dt,
-    "SVM": best_svm,
+    #"SVM": best_svm,
     "Naive Bayes": nb_model
 }
 
@@ -204,7 +204,7 @@ plt.xlabel("FPR")
 plt.ylabel("TPR")
 plt.legend()
 plt.tight_layout()
-plt.savefig(f'roc_curve_{best_model_name.lower().replace(" ", "_")}.png')
+plt.savefig(f'./results/roc_curve_{best_model_name.lower().replace(" ", "_")}.png')
 
 precision, recall, _ = precision_recall_curve(y_test, y_proba)
 plt.figure(figsize=(7, 5))
@@ -213,7 +213,7 @@ plt.title(f"Precision-Recall Curve - {best_model_name}")
 plt.xlabel("Recall")
 plt.ylabel("Precision")
 plt.tight_layout()
-plt.savefig(f'precision_recall_curve_{best_model_name.lower().replace(" ", "_")}.png')
+plt.savefig(f'./results/precision_recall_curve_{best_model_name.lower().replace(" ", "_")}.png')
 
 # --- 9. IMPORTÂNCIA DAS FEATURES para Logistic Regression ---
 print("Importância das features (coeficientes) - Logistic Regression:")

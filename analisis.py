@@ -43,44 +43,44 @@ def plot_percentual_avc(df, col, title, order=None, bins=None, labels=None, file
 # Gráficos solicitados
 
 # 2. Gênero
-plot_percentual_avc(df, 'gender', "Percentual de AVCs por gênero", order=['Female', 'Male'], filename='gender')
+plot_percentual_avc(df, 'gender', "Percentual de AVCs por gênero", order=['Female', 'Male'], filename='./analisis/gender')
 
 # 3. Idade (faixas de 10 anos)
 bins_idade = list(range(0, 91, 10))
 labels_idade = [f"{i}-{i+9}" for i in range(0, 90, 10)]
-plot_percentual_avc(df, 'age', "Percentual de AVCs por faixa etária (10 anos)", bins=bins_idade, labels=labels_idade, filename='age')
+plot_percentual_avc(df, 'age', "Percentual de AVCs por faixa etária (10 anos)", bins=bins_idade, labels=labels_idade, filename='./analisis/age')
 
 # 4. Hipertensão
-plot_percentual_avc(df, 'hypertension', "Percentual de AVCs por hipertensão", order=[0, 1], filename='hypertension')
+plot_percentual_avc(df, 'hypertension', "Percentual de AVCs por hipertensão", order=[0, 1], filename='./analisis/hypertension')
 
 # 5. Doença cardíaca
-plot_percentual_avc(df, 'heart_disease', "Percentual de AVCs por doença cardíaca", order=[0, 1], filename='heart_disease')
+plot_percentual_avc(df, 'heart_disease', "Percentual de AVCs por doença cardíaca", order=[0, 1], filename='./analisis/heart_disease')
 
 # 6. Estado civil
-plot_percentual_avc(df, 'ever_married', "Percentual de AVCs por estado civil", order=['No', 'Yes'], filename='ever_married')
+plot_percentual_avc(df, 'ever_married', "Percentual de AVCs por estado civil", order=['No', 'Yes'], filename='./analisis/ever_married')
 
 # 7. Tipo de trabalho
 plot_percentual_avc(df, 'work_type', "Percentual de AVCs por tipo de trabalho",
-                    order=['children', 'Govt_job', 'Never_worked', 'Private', 'Self-employed'], filename='work_type')
+                    order=['children', 'Govt_job', 'Never_worked', 'Private', 'Self-employed'], filename='./analisis/work_type')
 
 # 8. Tipo de residência
-plot_percentual_avc(df, 'Residence_type', "Percentual de AVCs por tipo de residência", order=['Rural', 'Urban'], filename='residence_type')
+plot_percentual_avc(df, 'Residence_type', "Percentual de AVCs por tipo de residência", order=['Rural', 'Urban'], filename='./analisis/residence_type')
 
 # 9. Glicose média (faixas de 20)
 max_glucose = int(df['avg_glucose_level'].max()) + 20
 bins_glicose = list(range(0, max_glucose, 20))
 labels_glicose = [f"{i}-{i+19}" for i in bins_glicose[:-1]]
 plot_percentual_avc(df, 'avg_glucose_level', "Percentual de AVCs por glicose média (faixas de 20)",
-                    bins=bins_glicose, labels=labels_glicose, filename='glucose_level')
+                    bins=bins_glicose, labels=labels_glicose, filename='./analisis/glucose_level')
 
 # 10. BMI (6 faixas)
 bins_bmi = [0, 18.5, 25, 30, 35, 40, df['bmi'].max() + 1]
 labels_bmi = ['Abaixo do peso', 'Normal', 'Sobrepeso', 'Obesidade I', 'Obesidade II', 'Obesidade III']
-plot_percentual_avc(df, 'bmi', "Percentual de AVCs por faixa de IMC", bins=bins_bmi, labels=labels_bmi, filename='bmi')
+plot_percentual_avc(df, 'bmi', "Percentual de AVCs por faixa de IMC", bins=bins_bmi, labels=labels_bmi, filename='./analisis/bmi')
 
 # 11. Fumante
 plot_percentual_avc(df, 'smoking_status', "Percentual de AVCs por status de tabagismo",
-                    order=['never smoked', 'formerly smoked', 'smokes', 'Unknown'], filename='smoking')
+                    order=['never smoked', 'formerly smoked', 'smokes', 'Unknown'], filename='./analisis/smoking')
 
 
 def mostrar_amostras_por_grupo(df, nome_grupo, coluna_original=None):
@@ -135,7 +135,7 @@ plt.figure(figsize=(10, 8))
 sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
 plt.title("Matriz de Correlação")
 plt.tight_layout()
-plt.savefig('correlacao_atributos')
+plt.savefig('./analisis/correlacao_atributos')
 
 
 plt.figure(figsize=(8, 5))
@@ -143,7 +143,7 @@ sns.boxplot(data=df, x='bmi', color='skyblue')
 plt.title("Distribuição de BMI com outliers")
 plt.xlabel("BMI")
 plt.tight_layout()
-plt.savefig("boxplot_bmi_outliers.png")
+plt.savefig("./analisis/boxplot_bmi_outliers.png")
 
 plt.figure(figsize=(10, 6))
 
@@ -164,4 +164,62 @@ plt.xlabel("Idade")
 plt.ylabel("IMC (BMI)")
 plt.legend()
 plt.tight_layout()
-plt.savefig("scatter_age_bmi_stroke.png")
+plt.savefig("./analisis/scatter_age_bmi_stroke.png")
+
+
+# --- Gráfico combinado: % AVC por faixa etária + média de BMI ---
+
+# Garantir que 'age_group' foi criada
+bins_idade = list(range(0, 91, 10))
+labels_idade = [f"{i}-{i+9}" for i in range(0, 90, 10)]
+df['age_group'] = pd.cut(df['age'], bins=bins_idade, labels=labels_idade, right=False)
+
+# Calcular percentual de AVC por faixa etária
+total_por_faixa = df['age_group'].value_counts().sort_index()
+avc_por_faixa = df[df['stroke'] == 1]['age_group'].value_counts().sort_index()
+percentual_avc = (avc_por_faixa / total_por_faixa * 100).fillna(0)
+
+# Calcular média de BMI por faixa etária
+media_bmi = df.groupby('age_group', observed=False)['bmi'].mean()
+
+# --- Plotando gráfico combinado ---
+fig, ax1 = plt.subplots(figsize=(10, 6))
+
+# Eixo da esquerda: barras vermelhas com % de AVC
+ax1.bar(percentual_avc.index, percentual_avc.values, color='crimson', alpha=0.7, label='% de AVC')
+ax1.set_ylabel('% de AVC', color='crimson')
+ax1.tick_params(axis='y', labelcolor='crimson')
+ax1.set_xlabel('Faixa Etária')
+ax1.set_title('% de AVC e Média de BMI por Faixa Etária')
+
+# Eixo da direita: linha azul com média de BMI
+ax2 = ax1.twinx()
+ax2.plot(media_bmi.index, media_bmi.values, color='steelblue', marker='o', linewidth=2, label='Média de BMI')
+ax2.set_ylabel('Média de BMI', color='steelblue')
+ax2.tick_params(axis='y', labelcolor='steelblue')
+
+# Legenda combinada
+lines_1, labels_1 = ax1.get_legend_handles_labels()
+lines_2, labels_2 = ax2.get_legend_handles_labels()
+ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper left')
+
+plt.tight_layout()
+plt.savefig("./analisis/grafico_combinado_avc_bmi_por_idade.png")
+
+
+# Filtrar pessoas entre 30 e 60 anos
+df_jovens = df[(df['age'] >= 30) & (df['age'] <= 60)].copy()
+
+# Definir faixas de BMI
+bins_bmi = [0, 18.5, 25, 30, 35, 40, df['bmi'].max() + 1]
+labels_bmi = ['Abaixo do peso', 'Normal', 'Sobrepeso', 'Obesidade I', 'Obesidade II', 'Obesidade III']
+
+# Gerar gráfico apenas com os jovens (30 a 60 anos)
+plot_percentual_avc(
+    df_jovens,
+    col='bmi',
+    title="Percentual de AVCs por faixa de IMC (30 a 60 anos)",
+    bins=bins_bmi,
+    labels=labels_bmi,
+    filename='./analisis/bmi_jovens_30a60'
+)
