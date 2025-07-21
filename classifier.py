@@ -66,82 +66,111 @@ print(f"Tamanho do teste: {len(X_test)}")
 print("-" * 50)
 
 # --- 4. ESCALONAMENTO ---
-scaler = RobustScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+num_cols = ['age', 'avg_glucose_level', 'bmi']  # ex: suas colunas numéricas
 
-# --- 5. SMOTE APENAS NO TREINO ---
-print(f"Antes do SMOTE:\n{y_train.value_counts()}")
-smote = SMOTE(random_state=RANDOM_STATE)
-X_train_resampled, y_train_resampled = smote.fit_resample(X_train_scaled, y_train)
-print(f"Após o SMOTE:\n{pd.Series(y_train_resampled).value_counts()}")
-print("-" * 50)
+scaler = RobustScaler()
+X_train_num_scaled = scaler.fit_transform(X_train[num_cols])
+X_test_num_scaled = scaler.transform(X_test[num_cols])
+
+# Mantém colunas categóricas intactas
+X_train_cat = X_train.drop(columns=num_cols).reset_index(drop=True)
+X_test_cat = X_test.drop(columns=num_cols).reset_index(drop=True)
+
+X_train_scaled = pd.concat([
+    pd.DataFrame(X_train_num_scaled, columns=num_cols),
+    X_train_cat.reset_index(drop=True)
+], axis=1)
+
+X_test_scaled = pd.concat([
+    pd.DataFrame(X_test_num_scaled, columns=num_cols),
+    X_test_cat.reset_index(drop=True)
+], axis=1)
+
+
+### SMOTE deve ser usado dentro do pipeline
+# # --- 5. SMOTE APENAS NO TREINO ---
+# print(f"Antes do SMOTE:\n{y_train.value_counts()}")
+# smote = SMOTE(random_state=RANDOM_STATE)
+# X_train_resampled, y_train_resampled = smote.fit_resample(X_train_scaled, y_train)
+# print(f"Após o SMOTE:\n{pd.Series(y_train_resampled).value_counts()}")
+# print("-" * 50)
 
 # --- 6. VALIDAÇÃO CRUZADA + AJUSTE DE HIPERPARÂMETROS ---
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
 
 # Grid para Regressão Logística
-logreg_params = {
-    'C': [0.01, 0.1, 1, 10],
-    'penalty': ['l2'],
-    'solver': ['liblinear']
-}
-logreg_model = LogisticRegression(random_state=RANDOM_STATE)
+logreg_pipeline = ImbPipeline(steps=[
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('scaler', RobustScaler()),
+    ('clf', LogisticRegression(random_state=RANDOM_STATE))
+])
+
 logreg_grid = GridSearchCV(
-    estimator=logreg_model,
-    param_grid=logreg_params,
+    estimator=logreg_pipeline,
+    param_grid={
+        'clf__C': [0.01, 0.1, 1, 10, 100],
+        'clf__penalty': ['l2'],
+        'clf__solver': ['liblinear']
+    },
     cv=cv,
-    scoring='roc_auc',
+    scoring='balanced_accuracy',
     n_jobs=-1,
     verbose=1
 )
 
 print("Executando GridSearchCV (Logistic Regression)...")
-logreg_grid.fit(X_train_resampled, y_train_resampled)
+logreg_grid.fit(X_train_scaled, y_train)
 best_logreg = logreg_grid.best_estimator_
 print(f"Melhores hiperparâmetros (LogReg): {logreg_grid.best_params_}")
 print("-" * 50)
 
 # Grid para KNN
-knn_params = {
-    'n_neighbors': [3, 5, 7],
-    'weights': ['uniform', 'distance'],
-    'metric': ['euclidean', 'manhattan']
-}
-knn_model = KNeighborsClassifier()
+knn_pipeline = ImbPipeline(steps=[
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('scaler', RobustScaler()),
+    ('clf', KNeighborsClassifier())
+])
+
 knn_grid = GridSearchCV(
-    estimator=knn_model,
-    param_grid=knn_params,
+    estimator=knn_pipeline,
+    param_grid={
+        'clf__n_neighbors': range(3, 15, 2),
+        'clf__weights': ['uniform', 'distance'],
+        'clf__metric': ['euclidean', 'manhattan']
+    },
     cv=cv,
-    scoring='roc_auc',
+    scoring='balanced_accuracy',
     n_jobs=-1,
     verbose=1
 )
 
 print("Executando GridSearchCV (KNN)...")
-knn_grid.fit(X_train_resampled, y_train_resampled)
+knn_grid.fit(X_train_scaled, y_train)
 best_knn = knn_grid.best_estimator_
 print(f"Melhores hiperparâmetros (KNN): {knn_grid.best_params_}")
 print("-" * 50)
 
 # Grid para Árvore de Decisão
-dt_params = {
-    'max_depth': [3, 5, 7, 10, None],
-    'min_samples_split': [2, 5, 10],
-    'min_samples_leaf': [1, 2, 4]
-}
-dt_model = DecisionTreeClassifier(random_state=RANDOM_STATE)
+dt_pipeline = ImbPipeline(steps=[
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('clf', DecisionTreeClassifier(random_state=RANDOM_STATE))
+])
+
 dt_grid = GridSearchCV(
-    estimator=dt_model,
-    param_grid=dt_params,
+    estimator=dt_pipeline,
+    param_grid={
+        'clf__max_depth': [3, 5, 10, 15, 20, None],
+        'clf__min_samples_split': [2, 5, 10],
+        'clf__min_samples_leaf': [1, 2, 4]
+    },
     cv=cv,
-    scoring='roc_auc',
+    scoring='balanced_accuracy',
     n_jobs=-1,
     verbose=1
 )
 
 print("Executando GridSearchCV (Decision Tree)...")
-dt_grid.fit(X_train_resampled, y_train_resampled)
+dt_grid.fit(X_train_scaled, y_train)
 best_dt = dt_grid.best_estimator_
 print(f"Melhores hiperparâmetros (Decision Tree): {dt_grid.best_params_}")
 print("-" * 50)
@@ -149,7 +178,7 @@ print("-" * 50)
 # Grid para SVM (com probabilidade ativada para ROC)
 '''
 svm_params = {
-    'C': [0.1, 1, 10],
+    'C': [0.01, 0.1, 1, 10, 100],
     'kernel': ['linear', 'rbf'],
     'gamma': ['scale', 'auto']
 }
@@ -158,21 +187,24 @@ svm_grid = GridSearchCV(
     estimator=svm_model,
     param_grid=svm_params,
     cv=cv,
-    scoring='roc_auc',
+    scoring='balanced_accuracy',
     n_jobs=-1,
     verbose=1
 )
 
 print("Executando GridSearchCV (SVM)...")
-svm_grid.fit(X_train_resampled, y_train_resampled)
+svm_grid.fit(X_train_scaled, y_train)
 best_svm = svm_grid.best_estimator_
 print(f"Melhores hiperparâmetros (SVM): {svm_grid.best_params_}")
 print("-" * 50)
 '''
 
 # Naive Bayes (não precisa de ajuste de hiperparâmetros)
+smote = SMOTE(random_state=RANDOM_STATE)
+X_train_nb, y_train_nb = smote.fit_resample(X_train_scaled, y_train)
 nb_model = GaussianNB()
-nb_model.fit(X_train_resampled, y_train_resampled)
+nb_model.fit(X_train_nb, y_train_nb)
+
 
 # --- 7. AVALIAÇÃO FINAL NO CONJUNTO DE TESTE ---
 modelos = {
@@ -233,8 +265,8 @@ plt.tight_layout()
 plt.savefig(f'./results/precision_recall_curve_{best_model_name.lower().replace(" ", "_")}.png')
 
 # --- 9. IMPORTÂNCIA DAS FEATURES para Logistic Regression ---
-print("Importância das features (coeficientes) - Logistic Regression:")
-feature_importance = pd.Series(best_logreg.coef_[0], index=X.columns)
-feature_importance = feature_importance.sort_values(key=abs, ascending=False)
-print(feature_importance.to_string())
-print("-" * 50)
+# print("Importância das features (coeficientes) - Logistic Regression:")
+# feature_importance = pd.Series(best_logreg.coef_[0], index=X.columns)
+# feature_importance = feature_importance.sort_values(key=abs, ascending=False)
+# print(feature_importance.to_string())
+# print("-" * 50)
