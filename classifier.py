@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
 from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -51,7 +52,7 @@ print(f"Tamanho do teste: {len(X_test)}")
 print("-" * 50)
 
 # --- 4. ESCALONAMENTO ---
-scaler = StandardScaler()
+scaler = RobustScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
@@ -130,8 +131,9 @@ dt_grid.fit(X_train_resampled, y_train_resampled)
 best_dt = dt_grid.best_estimator_
 print(f"Melhores hiperparâmetros (Decision Tree): {dt_grid.best_params_}")
 print("-" * 50)
-'''
+
 # Grid para SVM (com probabilidade ativada para ROC)
+'''
 svm_params = {
     'C': [0.1, 1, 10],
     'kernel': ['linear', 'rbf'],
@@ -153,6 +155,7 @@ best_svm = svm_grid.best_estimator_
 print(f"Melhores hiperparâmetros (SVM): {svm_grid.best_params_}")
 print("-" * 50)
 '''
+
 # Naive Bayes (não precisa de ajuste de hiperparâmetros)
 nb_model = GaussianNB()
 nb_model.fit(X_train_resampled, y_train_resampled)
