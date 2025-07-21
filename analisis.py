@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 # Ler o dataset
 df = pd.read_csv("./datasets/healthcare-dataset-stroke-data.csv")
 
+# Remover a coluna 'id' que não será usada no modelo.
+df.drop(columns=['id'], inplace=True)
+
 # Calcular percentual geral de AVC
 total_avc = df['stroke'].sum()
 total_geral = len(df)
@@ -92,7 +95,7 @@ def mostrar_amostras_por_grupo(df, nome_grupo, coluna_original=None):
     Retorna:
     - Um DataFrame com contagens por grupo
     """
-    print(f"\n📊 Contagem de amostras por grupo: {nome_grupo}")
+    print(f"\n Contagem de amostras por grupo: {nome_grupo}")
     if coluna_original:
         print(f"(Agrupado a partir de: {coluna_original})")
     
@@ -100,7 +103,7 @@ def mostrar_amostras_por_grupo(df, nome_grupo, coluna_original=None):
     
     # Exibir de forma bonita
     for grupo, qtd in contagem.items():
-        print(f"🧩 {grupo}: {qtd} amostras")
+        print(f" {grupo}: {qtd} amostras")
 
     return contagem.reset_index().rename(columns={'index': nome_grupo, nome_grupo: 'quantidade'})
 
@@ -119,3 +122,46 @@ mostrar_amostras_por_grupo(df, 'avg_glucose_group', 'avg_glucose_level')
 
 # Para faixa etária
 mostrar_amostras_por_grupo(df, 'age_group', 'age')
+
+
+# Correlação de Pearson (linear) entre variáveis numéricas
+correlation_matrix = df.corr(numeric_only=True)
+
+# Visualizar com heatmap
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
+plt.title("Matriz de Correlação")
+plt.tight_layout()
+plt.savefig('correlacao_atributos')
+
+
+plt.figure(figsize=(8, 5))
+sns.boxplot(data=df, x='bmi', color='skyblue')
+plt.title("Distribuição de BMI com outliers")
+plt.xlabel("BMI")
+plt.tight_layout()
+plt.savefig("boxplot_bmi_outliers.png")
+
+plt.figure(figsize=(10, 6))
+
+
+# Scatter plot bmi x age 
+plt.figure(figsize=(10, 6))
+
+# Stroke = 0 (sem AVC) - bolinha vazia
+sns.scatterplot(data=df[df['stroke'] == 0], x='age', y='bmi',
+                edgecolor='black', facecolor='none', label='Sem AVC (0)', alpha=0.5)
+
+# Stroke = 1 (com AVC) - bolinha preenchida
+sns.scatterplot(data=df[df['stroke'] == 1], x='age', y='bmi',
+                color='red', label='Com AVC (1)', alpha=0.8)
+
+plt.title("Relação entre Idade, BMI e Ocorrência de AVC")
+plt.xlabel("Idade")
+plt.ylabel("IMC (BMI)")
+plt.legend()
+plt.tight_layout()
+plt.savefig("scatter_age_bmi_stroke.png")
