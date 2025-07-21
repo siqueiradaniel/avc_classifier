@@ -15,6 +15,9 @@ from sklearn.metrics import (
     average_precision_score, balanced_accuracy_score
 )
 from imblearn.over_sampling import SMOTE
+from scipy.stats import shapiro
+from imblearn.pipeline import Pipeline as ImbPipeline
+
 import warnings
 warnings.filterwarnings("ignore")  # Para evitar warnings do GridSearch
 
@@ -32,6 +35,17 @@ try:
 except FileNotFoundError:
     print(f"ERRO: O arquivo '{file_path}' não foi encontrado.")
     exit()
+
+
+# --- Checagem de normalidade nas variáveis numéricas ---
+variaveis_numericas = ['age', 'avg_glucose_level', 'bmi']
+
+print("\nTeste de normalidade (Shapiro-Wilk):")
+for col in variaveis_numericas:
+    stat, p = shapiro(df[col].dropna())
+    print(f"{col}: W = {stat:.4f}, p = {p:.4f} => {'Normal' if p > 0.05 else 'Não normal'}")
+print("-" * 50)
+
 
 # --- 2. SEPARAR FEATURES E ALVO ---
 X = df.drop('stroke', axis=1)
