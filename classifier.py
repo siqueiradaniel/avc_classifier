@@ -1,12 +1,24 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.metrics import (
+    classification_report, confusion_matrix, accuracy_score,
+    roc_auc_score, roc_curve, precision_recall_curve,
+    average_precision_score, balanced_accuracy_score
+)
 from imblearn.over_sampling import SMOTE
+from sklearn.pipeline import Pipeline
+import warnings
+warnings.filterwarnings("ignore")  # Para evitar warnings do GridSearch
 
-# --- 1. CARREGAR O DATASET PROCESSADO ---
-# Usamos o arquivo final gerado pelo script de limpeza.
+# --- FIXAR SEMENTES ---
+RANDOM_STATE = 42
+np.random.seed(RANDOM_STATE)
+
+# --- 1. CARREGAR O DATASET ---
 file_path = 'datasets/clean/healthcare-dataset-stroke-data-PROCESSADO.csv'
 
 try:
@@ -14,69 +26,106 @@ try:
     print("Dataset processado carregado com sucesso.")
     print("-" * 50)
 except FileNotFoundError:
-    print(f"ERRO: O arquivo '{file_path}' não foi encontrado. Execute o script de limpeza primeiro.")
+    print(f"ERRO: O arquivo '{file_path}' não foi encontrado.")
     exit()
 
-# --- 2. SEPARAR FEATURES (X) E ALVO (y) ---
+# --- 2. SEPARAR FEATURES E ALVO ---
 X = df.drop('stroke', axis=1)
 y = df['stroke']
-print("Features (X) e Alvo (y) separados.")
+
 print(f"Formato de X: {X.shape}")
 print(f"Formato de y: {y.shape}")
 print("-" * 50)
 
-# --- 3. DIVIDIR EM CONJUNTOS DE TREINO E TESTE ---
-# A divisão é o PRIMEIRO passo antes de qualquer pré-processamento que aprenda com os dados.
-# stratify=y garante que a proporção de casos de AVC seja a mesma nos conjuntos de treino e teste.
-# random_state=42 garante que a divisão seja a mesma toda vez que rodarmos o código.
+# --- 3. DIVISÃO EM TREINO/TESTE ---
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, 
-    test_size=0.2,    # 20% dos dados para teste
-    random_state=42,  # Para reprodutibilidade
-    stratify=y        # Essencial para dados desbalanceados
+    X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y
 )
-print("Dados divididos em treino e teste.")
-print(f"Tamanho do treino: {len(X_train)} amostras")
-print(f"Tamanho do teste: {len(X_test)} amostras")
+
+print("Conjuntos de treino e teste separados.")
+print(f"Tamanho do treino: {len(X_train)}")
+print(f"Tamanho do teste: {len(X_test)}")
 print("-" * 50)
 
-# --- 4. ESCALONAMENTO DE FEATURES ---
-# O scaler é "treinado" (fit) APENAS com os dados de treino para evitar data leakage.
+# --- 4. ESCALONAMENTO ---
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test) # Apenas transformamos os dados de teste.
-print("Features escalonadas.")
-print("-" * 50)
+X_test_scaled = scaler.transform(X_test)
 
-# --- 5. BALANCEAMENTO DE CLASSES COM SMOTE ---
-# O SMOTE é aplicado APENAS nos dados de treino. O teste deve refletir a realidade.
-print(f"Contagem de classes antes do SMOTE:\n{y_train.value_counts()}")
-smote = SMOTE(random_state=42)
+# --- 5. SMOTE APENAS NO TREINO ---
+print(f"Antes do SMOTE:\n{y_train.value_counts()}")
+smote = SMOTE(random_state=RANDOM_STATE)
 X_train_resampled, y_train_resampled = smote.fit_resample(X_train_scaled, y_train)
-print(f"\nContagem de classes depois do SMOTE:\n{pd.Series(y_train_resampled).value_counts()}")
+print(f"Após o SMOTE:\n{pd.Series(y_train_resampled).value_counts()}")
 print("-" * 50)
 
-# --- 6. TREINAMENTO DO MODELO DE CLASSIFICAÇÃO ---
-# Usaremos a Regressão Logística como um primeiro modelo de base.
-print("Treinando o modelo de Regressão Logística...")
-model = LogisticRegression(random_state=42)
-model.fit(X_train_resampled, y_train_resampled)
-print("Modelo treinado.")
+# --- 6. VALIDAÇÃO CRUZADA + AJUSTE DE HIPERPARÂMETROS ---
+param_grid = {
+    'C': [0.01, 0.1, 1, 10],
+    'penalty': ['l2'],
+    'solver': ['liblinear']
+}
+
+model = LogisticRegression(random_state=RANDOM_STATE)
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+
+grid_search = GridSearchCV(
+    estimator=model,
+    param_grid=param_grid,
+    cv=cv,
+    scoring='roc_auc',
+    n_jobs=-1,
+    verbose=1
+)
+
+print("Executando GridSearchCV com validação cruzada...")
+grid_search.fit(X_train_resampled, y_train_resampled)
+
+best_model = grid_search.best_estimator_
+print(f"Melhores hiperparâmetros encontrados: {grid_search.best_params_}")
 print("-" * 50)
 
-# --- 7. AVALIAÇÃO DO MODELO ---
-print("Avaliando o modelo no conjunto de teste...")
-# Fazendo previsões nos dados de teste (que nunca foram vistos ou usados no treino)
-y_pred = model.predict(X_test_scaled)
+# --- 7. AVALIAÇÃO FINAL NO CONJUNTO DE TESTE ---
+print("Avaliando o modelo final no conjunto de teste...")
+y_pred = best_model.predict(X_test_scaled)
+y_proba = best_model.predict_proba(X_test_scaled)[:, 1]  # Probabilidades da classe 1
 
-# Métricas de avaliação
-accuracy = accuracy_score(y_test, y_pred)
-conf_matrix = confusion_matrix(y_test, y_pred)
-class_report = classification_report(y_test, y_pred)
-
-print(f"Acurácia no Teste: {accuracy:.4f}\n")
-print("Matriz de Confusão:")
-print(conf_matrix)
+print(f"Acurácia: {accuracy_score(y_test, y_pred):.4f}")
+print(f"Balanced Accuracy: {balanced_accuracy_score(y_test, y_pred):.4f}")
+print(f"ROC AUC Score: {roc_auc_score(y_test, y_proba):.4f}")
+print(f"Average Precision (PR AUC): {average_precision_score(y_test, y_proba):.4f}")
+print("\nMatriz de Confusão:")
+print(confusion_matrix(y_test, y_pred))
 print("\nRelatório de Classificação:")
-print(class_report)
+print(classification_report(y_test, y_pred))
+print("-" * 50)
+
+# --- 8. CURVAS DE AVALIAÇÃO VISUAL ---
+# ROC Curve
+fpr, tpr, _ = roc_curve(y_test, y_proba)
+plt.figure(figsize=(7, 5))
+plt.plot(fpr, tpr, label='ROC Curve')
+plt.plot([0, 1], [0, 1], '--', color='gray')
+plt.title("ROC Curve")
+plt.xlabel("FPR")
+plt.ylabel("TPR")
+plt.legend()
+plt.tight_layout()
+plt.savefig("roc_curve.png")
+
+# Precision-Recall Curve
+precision, recall, _ = precision_recall_curve(y_test, y_proba)
+plt.figure(figsize=(7, 5))
+plt.plot(recall, precision, label='Precision-Recall Curve', color='green')
+plt.title("Precision-Recall Curve")
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.tight_layout()
+plt.savefig("precision_recall_curve.png")
+
+# --- 9. IMPORTÂNCIA DAS FEATURES ---
+print("Importância das features (coeficientes):")
+feature_importance = pd.Series(best_model.coef_[0], index=X.columns)
+feature_importance = feature_importance.sort_values(key=abs, ascending=False)
+print(feature_importance.to_string())
 print("-" * 50)
