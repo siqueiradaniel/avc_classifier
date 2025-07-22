@@ -5,10 +5,12 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
+from sklearn.model_selection import cross_validate
 from sklearn.metrics import (
-    classification_report, confusion_matrix, accuracy_score,
-    roc_auc_score, roc_curve, precision_recall_curve,
-    average_precision_score, balanced_accuracy_score
+    balanced_accuracy_score,
+    f1_score,
+    average_precision_score,
+    confusion_matrix,
 )
 from imblearn.over_sampling import SMOTE
 from scipy.stats import shapiro
@@ -73,8 +75,6 @@ print(f"Tamanho do teste: {len(X_test)}")
 print("-" * 50)
 
 # --- 6. VALIDAÇÃO CRUZADA + AJUSTE DE HIPERPARÂMETROS ---
-cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
-
 class Winsorizer(BaseEstimator, TransformerMixin):
     def __init__(self, lower=0.01, upper=0.01, variables=None):
         self.lower = lower
@@ -96,42 +96,23 @@ class Winsorizer(BaseEstimator, TransformerMixin):
             X_copy[col] = np.clip(X_copy[col], low, high)
         return X_copy
 
-from sklearn.model_selection import cross_validate
-
 scoring_metrics = {
     'balanced_accuracy': 'balanced_accuracy',
-    # 'precision': 'precision',
-    # 'recall': 'recall',
-    # 'f1': 'f1',
-    # 'roc_auc': 'roc_auc',
-    # 'average_precision': 'average_precision'
+    #'f1': 'f1',
+    'average_precision': 'average_precision',
 }
 
-def avaliar_modelo_cv(modelo, X, y, nome_modelo):
-    print(f"\nAvaliação final por cross-validation - {nome_modelo}:")
-    resultados = cross_validate(
-        modelo, X, y,
-        cv=cv,
-        scoring=scoring_metrics,
-        return_train_score=False,
-        n_jobs=-1
-    )
-    for metrica in scoring_metrics:
-        valores = resultados[f'test_{metrica}']
-        print(f"{metrica}: {np.mean(valores):.4f} ± {np.std(valores):.4f}")
+metricas_sklearn = [
+    balanced_accuracy_score,
+    #f1_score,
+    average_precision_score
+]
 
-
-def treinar_modelo_com_pipeline(
-    nome_modelo,
+def construir_pipeline(
     classificador,
-    param_grid=None,
     usar_scaler=True,
     usar_winsor=True,
-    usar_smote=True,
-    ajustar=True,
-    X_train=None,
-    y_train=None,
-    cv=None
+    usar_smote=True
 ):
     steps = []
 
@@ -145,43 +126,236 @@ def treinar_modelo_com_pipeline(
         steps.append(('smote', SMOTE(random_state=RANDOM_STATE)))
 
     steps.append(('clf', classificador))
-
     pipeline = ImbPipeline(steps=steps)
+    return pipeline
 
-    if ajustar and param_grid is not None:
-        print(f"Executando GridSearchCV ({nome_modelo})...")
-        grid = GridSearchCV(
+def avaliar_modelo_cv_nested(
+    nome_modelo,
+    classificador,
+    param_grid=None,
+    X_train=None, y_train=None,
+    X_test=None, y_test=None,
+    usar_scaler=True,
+    usar_winsor=True,
+    usar_smote=True,
+    ajustar=True
+):
+    print(f"\nAvaliação com Nested Cross-Validation - {nome_modelo}:")
+
+    outer_cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+
+    if ajustar and param_grid:
+        # Loop interno para ajuste de hiperparâmetros
+        inner_cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
+
+        pipeline = construir_pipeline(
+            classificador,
+            usar_scaler=usar_scaler,
+            usar_winsor=usar_winsor,
+            usar_smote=usar_smote
+        )
+
+        modelo_cv = GridSearchCV(
             estimator=pipeline,
             param_grid=param_grid,
-            cv=cv,
+            cv=inner_cv,
             scoring='balanced_accuracy',
-            n_jobs=-1,
-            verbose=1
+            n_jobs=-1
         )
-        grid.fit(X_train, y_train)
-        melhor_modelo = grid.best_estimator_
-        print(f"Melhores hiperparâmetros ({nome_modelo}): {grid.best_params_}")
     else:
-        print(f"Avaliando {nome_modelo} sem grid search...")
-        pipeline.fit(X_train, y_train)
-        melhor_modelo = pipeline
+        # Sem ajuste, usamos o pipeline direto
+        modelo_cv = construir_pipeline(
+            classificador,
+            usar_scaler=usar_scaler,
+            usar_winsor=usar_winsor,
+            usar_smote=usar_smote
+        )
 
-    avaliar_modelo_cv(melhor_modelo, X_train, y_train, nome_modelo)
+    # Avaliação com CV aninhada
+    resultados = cross_validate(
+        modelo_cv, X_train, y_train,
+        cv=outer_cv,
+        scoring=scoring_metrics,
+        return_train_score=False,
+        n_jobs=-1
+    )
+
+    print("\nMÉTRICAS DE VALIDAÇÃO (Nested CV):")
+    for metrica in scoring_metrics:
+        valores = resultados[f'test_{metrica}']
+        print(f"{metrica}: {np.mean(valores):.4f} ± {np.std(valores):.4f}")
+
+    # Treinamento final no conjunto completo de treino
+    if ajustar and param_grid:
+        modelo_cv.fit(X_train, y_train)
+        modelo_final = modelo_cv.best_estimator_
+    else:
+        modelo_final = modelo_cv
+        modelo_final.fit(X_train, y_train)
+
+    # Avaliação final no conjunto de teste
+    y_pred = modelo_final.predict(X_test)
+    print("\nMÉTRICAS NO CONJUNTO DE TESTE:")
+    for nome, func in zip(scoring_metrics, metricas_sklearn):
+        valor = func(y_test, y_pred)
+        print(f"{nome}: {valor:.4f}")
+
+    print("\nMatriz de Confusão:")
+    print(confusion_matrix(y_test, y_pred))
+
     print("-" * 50)
-    return melhor_modelo
+
+    return modelo_final
+
+### Nested
+# def avaliar_modelo_cv_nested(
+#     nome_modelo,
+#     classificador,
+#     param_grid=None,
+#     X=None, y=None,
+#     usar_scaler=True,
+#     usar_winsor=True,
+#     usar_smote=True,
+#     ajustar=True
+# ):
+#     print(f"\nAvaliação com Nested Cross-Validation - {nome_modelo}:")
+
+#     outer_cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+
+#     if ajustar and param_grid:
+#         # Loop interno para ajuste de hiperparâmetros
+#         inner_cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
+
+#         pipeline = construir_pipeline(
+#             classificador,
+#             usar_scaler=usar_scaler,
+#             usar_winsor=usar_winsor,
+#             usar_smote=usar_smote
+#         )
+
+#         modelo_cv = GridSearchCV(
+#             estimator=pipeline,
+#             param_grid=param_grid,
+#             cv=inner_cv,
+#             scoring='balanced_accuracy',
+#             n_jobs=-1
+#         )
+
+#     else:
+#         # Sem ajuste, usamos o pipeline direto
+#         modelo_cv = construir_pipeline(
+#             classificador,
+#             usar_scaler=usar_scaler,
+#             usar_winsor=usar_winsor,
+#             usar_smote=usar_smote
+#         )
+
+#     resultados = cross_validate(
+#         modelo_cv, X, y,
+#         cv=outer_cv,
+#         scoring=scoring_metrics,
+#         return_train_score=False,
+#         n_jobs=-1
+#     )
+
+#     for metrica in scoring_metrics:
+#         valores = resultados[f'test_{metrica}']
+#         print(f"{metrica}: {np.mean(valores):.4f} ± {np.std(valores):.4f}")
+
+#     print("-" * 50)
+
+### Sem Nested
+# cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+
+# def avaliar_modelo_cv(modelo, X, y, nome_modelo):
+#     print(f"\nAvaliação final por cross-validation - {nome_modelo}:")
+#     resultados = cross_validate(
+#         modelo, X, y,
+#         cv=cv,
+#         scoring=scoring_metrics,
+#         return_train_score=False,
+#         n_jobs=-1
+#     )
+#     for metrica in scoring_metrics:
+#         valores = resultados[f'test_{metrica}']
+#         print(f"{metrica}: {np.mean(valores):.4f} ± {np.std(valores):.4f}")
+
+
+# def treinar_modelo_com_pipeline(
+#     nome_modelo,
+#     classificador,
+#     param_grid=None,
+#     usar_scaler=True,
+#     usar_winsor=True,
+#     usar_smote=True,
+#     ajustar=True,
+#     X_train=None,
+#     y_train=None,
+#     cv=None
+# ):
+#     steps = []
+
+#     if usar_winsor:
+#         steps.append(('winsor', Winsorizer(variables=variaveis_numericas)))
+
+#     if usar_scaler:
+#         steps.append(('scaler', RobustScaler()))
+
+#     if usar_smote:
+#         steps.append(('smote', SMOTE(random_state=RANDOM_STATE)))
+
+#     steps.append(('clf', classificador))
+
+#     pipeline = ImbPipeline(steps=steps)
+
+#     if ajustar and param_grid is not None:
+#         print(f"Executando GridSearchCV ({nome_modelo})...")
+#         grid = GridSearchCV(
+#             estimator=pipeline,
+#             param_grid=param_grid,
+#             cv=cv,
+#             scoring='balanced_accuracy',
+#             n_jobs=-1,
+#             verbose=1
+#         )
+#         grid.fit(X_train, y_train)
+#         melhor_modelo = grid.best_estimator_
+#         print(f"Melhores hiperparâmetros ({nome_modelo}): {grid.best_params_}")
+#     else:
+#         print(f"Avaliando {nome_modelo} sem grid search...")
+#         pipeline.fit(X_train, y_train)
+#         melhor_modelo = pipeline
+
+#     avaliar_modelo_cv(melhor_modelo, X_train, y_train, nome_modelo)
+#     print("-" * 50)
+#     return melhor_modelo
 
 # Grid para Classificador Ingenuo
-modelo_dummy = treinar_modelo_com_pipeline(
-    nome_modelo="Classificador Ingenuo",
+avaliar_modelo_cv_nested(
+    nome_modelo="Classificador Ingênuo",
     classificador=DummyClassifier(strategy="most_frequent", random_state=RANDOM_STATE),
+    param_grid=None,
+    X_train=X_train,
+    y_train=y_train,
+    X_test=X_test,
+    y_test=y_test,
+    ajustar=False,
     usar_scaler=False,
     usar_winsor=False,
     usar_smote=False,
-    ajustar=False,
-    X_train=X_train,
-    y_train=y_train,
-    cv=cv
 )
+
+# modelo_dummy = treinar_modelo_com_pipeline(
+#     nome_modelo="Classificador Ingenuo",
+#     classificador=DummyClassifier(strategy="most_frequent", random_state=RANDOM_STATE),
+#     usar_scaler=False,
+#     usar_winsor=False,
+#     usar_smote=False,
+#     ajustar=False,
+#     X_train=X_train,
+#     y_train=y_train,
+#     cv=cv
+# )
 
 # Grid para Regressão Logística
 logreg_params = {
@@ -190,18 +364,28 @@ logreg_params = {
     'clf__solver': ['liblinear']
 }
 
-modelo_logreg = treinar_modelo_com_pipeline(
+avaliar_modelo_cv_nested(
     nome_modelo="Logistic Regression",
     classificador=LogisticRegression(random_state=RANDOM_STATE),
     param_grid=logreg_params,
-    usar_scaler=True,
-    usar_winsor=True,
-    usar_smote=True,
-    ajustar=True,
     X_train=X_train,
     y_train=y_train,
-    cv=cv
+    X_test=X_test,
+    y_test=y_test,
 )
+
+# modelo_logreg = treinar_modelo_com_pipeline(
+#     nome_modelo="Logistic Regression",
+#     classificador=LogisticRegression(random_state=RANDOM_STATE),
+#     param_grid=logreg_params,
+#     usar_scaler=True,
+#     usar_winsor=True,
+#     usar_smote=True,
+#     ajustar=True,
+#     X_train=X_train,
+#     y_train=y_train,
+#     cv=cv
+# )
 
 # Grid para KNN
 knn_params = {
@@ -210,18 +394,28 @@ knn_params = {
     'clf__metric': ['euclidean', 'manhattan']
 }
 
-modelo_knn = treinar_modelo_com_pipeline(
+avaliar_modelo_cv_nested(
     nome_modelo="KNN",
     classificador=KNeighborsClassifier(),
     param_grid=knn_params,
-    usar_scaler=True,
-    usar_winsor=True,
-    usar_smote=True,
-    ajustar=True,
     X_train=X_train,
     y_train=y_train,
-    cv=cv
+    X_test=X_test,
+    y_test=y_test,
 )
+
+# modelo_knn = treinar_modelo_com_pipeline(
+#     nome_modelo="KNN",
+#     classificador=KNeighborsClassifier(),
+#     param_grid=knn_params,
+#     usar_scaler=True,
+#     usar_winsor=True,
+#     usar_smote=True,
+#     ajustar=True,
+#     X_train=X_train,
+#     y_train=y_train,
+#     cv=cv
+# )
 
 # Grid para Árvore de Decisão
 dt_params = {
@@ -230,18 +424,29 @@ dt_params = {
     'clf__min_samples_leaf': [1, 2, 4]
 }
 
-modelo_dt = treinar_modelo_com_pipeline(
+avaliar_modelo_cv_nested(
     nome_modelo="Decision Tree",
     classificador=DecisionTreeClassifier(random_state=RANDOM_STATE),
     param_grid=dt_params,
-    usar_scaler=False,  # árvores não precisam de scaler
-    usar_winsor=True,
-    usar_smote=True,
-    ajustar=True,
     X_train=X_train,
     y_train=y_train,
-    cv=cv
+    X_test=X_test,
+    y_test=y_test,
+    usar_scaler=False,  # árvores não precisam de scaler
 )
+
+# modelo_dt = treinar_modelo_com_pipeline(
+#     nome_modelo="Decision Tree",
+#     classificador=DecisionTreeClassifier(random_state=RANDOM_STATE),
+#     param_grid=dt_params,
+#     usar_scaler=False,  # árvores não precisam de scaler
+#     usar_winsor=True,
+#     usar_smote=True,
+#     ajustar=True,
+#     X_train=X_train,
+#     y_train=y_train,
+#     cv=cv
+# )
 
 # Pipeline SVM com Winsorizer, SMOTE e Escalonamento
 svm_params = {
@@ -250,34 +455,57 @@ svm_params = {
     'clf__gamma': ['scale', 'auto']
 }
 
-modelo_svm = treinar_modelo_com_pipeline(
+avaliar_modelo_cv_nested(
     nome_modelo="SVM",
     classificador=SVC(
-        random_state=RANDOM_STATE, 
+        random_state=RANDOM_STATE,
         # probability=True 
-    ),
+    ),  # probability=False por padrão, usar se precisar predict_proba
     param_grid=svm_params,
-    usar_scaler=True,
-    usar_winsor=True,
-    usar_smote=True,
-    ajustar=True,
     X_train=X_train,
     y_train=y_train,
-    cv=cv
+    X_test=X_test,
+    y_test=y_test,
 )
 
+# modelo_svm = treinar_modelo_com_pipeline(
+#     nome_modelo="SVM",
+#     classificador=SVC(
+#         random_state=RANDOM_STATE, 
+#         # probability=True 
+#     ),
+#     param_grid=svm_params,
+#     usar_scaler=True,
+#     usar_winsor=True,
+#     usar_smote=True,
+#     ajustar=True,
+#     X_train=X_train,
+#     y_train=y_train,
+#     cv=cv
+# )
+
 # Naive Bayes (não precisa de ajuste de hiperparâmetros)
-modelo_nb = treinar_modelo_com_pipeline(
+avaliar_modelo_cv_nested(
     nome_modelo="Naive Bayes",
     classificador=GaussianNB(),
-    ajustar=False,
-    usar_scaler=True,
-    usar_winsor=True,
-    usar_smote=True,
+    ajustar=False,  # sem grid search pois NB não precisa
     X_train=X_train,
     y_train=y_train,
-    cv=cv
+    X_test=X_test,
+    y_test=y_test
 )
+
+# modelo_nb = treinar_modelo_com_pipeline(
+#     nome_modelo="Naive Bayes",
+#     classificador=GaussianNB(),
+#     ajustar=False,
+#     usar_scaler=True,
+#     usar_winsor=True,
+#     usar_smote=True,
+#     X_train=X_train,
+#     y_train=y_train,
+#     cv=cv
+# )
 
 # Random Forest (não é sensível a outliers nem a escalas)
 rf_params = {
@@ -286,7 +514,7 @@ rf_params = {
     'clf__min_samples_split': [2, 5]
 }
 
-modelo_rf = treinar_modelo_com_pipeline(
+avaliar_modelo_cv_nested(
     nome_modelo="Random Forest",
     classificador=RandomForestClassifier(
         random_state=RANDOM_STATE,
@@ -295,12 +523,27 @@ modelo_rf = treinar_modelo_com_pipeline(
     param_grid=rf_params,
     usar_scaler=False,     # não precisa para árvores
     usar_winsor=False,     # idem
-    usar_smote=True,
-    ajustar=True,
     X_train=X_train,
     y_train=y_train,
-    cv=cv
+    X_test=X_test,
+    y_test=y_test
 )
+
+# modelo_rf = treinar_modelo_com_pipeline(
+#     nome_modelo="Random Forest",
+#     classificador=RandomForestClassifier(
+#         random_state=RANDOM_STATE,
+#         class_weight='balanced'
+#     ),
+#     param_grid=rf_params,
+#     usar_scaler=False,     # não precisa para árvores
+#     usar_winsor=False,     # idem
+#     usar_smote=True,
+#     ajustar=True,
+#     X_train=X_train,
+#     y_train=y_train,
+#     cv=cv
+# )
 
 # AdaBoost
 ada_params = {
@@ -308,18 +551,28 @@ ada_params = {
     'clf__learning_rate': [0.5, 1.0, 1.5]
 }
 
-modelo_ada = treinar_modelo_com_pipeline(
+avaliar_modelo_cv_nested(
     nome_modelo="AdaBoost",
     classificador=AdaBoostClassifier(random_state=RANDOM_STATE),
     param_grid=ada_params,
-    usar_scaler=True,
-    usar_winsor=True,
-    usar_smote=True,
-    ajustar=True,
     X_train=X_train,
     y_train=y_train,
-    cv=cv
+    X_test=X_test,
+    y_test=y_test
 )
+
+# modelo_ada = treinar_modelo_com_pipeline(
+#     nome_modelo="AdaBoost",
+#     classificador=AdaBoostClassifier(random_state=RANDOM_STATE),
+#     param_grid=ada_params,
+#     usar_scaler=True,
+#     usar_winsor=True,
+#     usar_smote=True,
+#     ajustar=True,
+#     X_train=X_train,
+#     y_train=y_train,
+#     cv=cv
+# )
 
 # XGBoost
 xgb_params = {
@@ -328,83 +581,99 @@ xgb_params = {
     'clf__learning_rate': [0.01, 0.1, 0.2]
 }
 
-modelo_xgb = treinar_modelo_com_pipeline(
+avaliar_modelo_cv_nested(
     nome_modelo="XGBoost",
     classificador=XGBClassifier(
         random_state=RANDOM_STATE,
         eval_metric='logloss'
     ),
     param_grid=xgb_params,
-    usar_scaler=True,
-    usar_winsor=True,
-    usar_smote=True,
-    ajustar=True,
     X_train=X_train,
     y_train=y_train,
-    cv=cv
+    X_test=X_test,
+    y_test=y_test
 )
 
-# --- 7. AVALIAÇÃO FINAL NO CONJUNTO DE TESTE ---
-modelos = {
-    "Classificador Ingenuo": modelo_dummy,
-    "Logistic Regression": modelo_logreg,
-    "KNN": modelo_knn,
-    "Decision Tree": modelo_dt,
-    "SVM": modelo_svm,
-    "Naive Bayes": modelo_nb,
-    "Random Forest": modelo_rf,
-    "AdaBoost": modelo_ada,
-    "XGBoost": modelo_xgb,
-}
+# modelo_xgb = treinar_modelo_com_pipeline(
+#     nome_modelo="XGBoost",
+#     classificador=XGBClassifier(
+#         random_state=RANDOM_STATE,
+#         eval_metric='logloss'
+#     ),
+#     param_grid=xgb_params,
+#     usar_scaler=True,
+#     usar_winsor=True,
+#     usar_smote=True,
+#     ajustar=True,
+#     X_train=X_train,
+#     y_train=y_train,
+#     cv=cv
+# )
 
-print("Comparando modelos no conjunto de teste...\n")
+### A avaliação com os dados de teste está sendo feito na função
+# # --- 7. AVALIAÇÃO FINAL NO CONJUNTO DE TESTE ---
+# modelos = {
+#     "Classificador Ingenuo": modelo_dummy,
+#     "Logistic Regression": modelo_logreg,
+#     "KNN": modelo_knn,
+#     "Decision Tree": modelo_dt,
+#     "SVM": modelo_svm,
+#     "Naive Bayes": modelo_nb,
+#     "Random Forest": modelo_rf,
+#     "AdaBoost": modelo_ada,
+#     "XGBoost": modelo_xgb,
+# }
 
-resultados = []
+# print("Comparando modelos no conjunto de teste...\n")
 
-for nome, modelo in modelos.items():
-    y_pred = modelo.predict(X_test)
-    # Alguns modelos (NaiveBayes) podem não ter predict_proba, mas GaussianNB tem
-    y_proba = modelo.predict_proba(X_test)[:, 1] if hasattr(modelo, "predict_proba") else None
+# resultados = []
 
-    auc_roc = roc_auc_score(y_test, y_proba) if y_proba is not None else float('nan')
-    avg_precision = average_precision_score(y_test, y_proba) if y_proba is not None else float('nan')
+# for nome, modelo in modelos.items():
+#     y_pred = modelo.predict(X_test)
+#     # Alguns modelos (NaiveBayes) podem não ter predict_proba, mas GaussianNB tem
+#     y_proba = modelo.predict_proba(X_test)[:, 1] if hasattr(modelo, "predict_proba") else None
 
-    print(f"--- {nome} ---")
-    print(f"Acurácia: {accuracy_score(y_test, y_pred):.4f}")
-    print(f"Balanced Accuracy: {balanced_accuracy_score(y_test, y_pred):.4f}")
-    # if y_proba is not None:
-    #     print(f"ROC AUC Score: {auc_roc:.4f}")
-    #     print(f"Average Precision (PR AUC): {avg_precision:.4f}")
-    print("\nMatriz de Confusão:")
-    print(confusion_matrix(y_test, y_pred))
-    #print("\nRelatório de Classificação:")
-    #print(classification_report(y_test, y_pred))
-    print("-" * 50)
+#     auc_roc = roc_auc_score(y_test, y_proba) if y_proba is not None else float('nan')
+#     avg_precision = average_precision_score(y_test, y_proba) if y_proba is not None else float('nan')
 
-# --- 8. CURVAS DE AVALIAÇÃO VISUAL para o melhor modelo (exemplo LogReg) ---
-best_model_name = "Logistic Regression"
-best_model = modelo_logreg
+#     print(f"--- {nome} ---")
+#     print(f"Acurácia: {accuracy_score(y_test, y_pred):.4f}")
+#     print(f"Balanced Accuracy: {balanced_accuracy_score(y_test, y_pred):.4f}")
+#     # if y_proba is not None:
+#     #     print(f"ROC AUC Score: {auc_roc:.4f}")
+#     #     print(f"Average Precision (PR AUC): {avg_precision:.4f}")
+#     print("\nMatriz de Confusão:")
+#     print(confusion_matrix(y_test, y_pred))
+#     #print("\nRelatório de Classificação:")
+#     #print(classification_report(y_test, y_pred))
+#     print("-" * 50)
 
-y_proba = best_model.predict_proba(X_test)[:, 1]
-fpr, tpr, _ = roc_curve(y_test, y_proba)
-plt.figure(figsize=(7, 5))
-plt.plot(fpr, tpr, label='ROC Curve')
-plt.plot([0, 1], [0, 1], '--', color='gray')
-plt.title(f"ROC Curve - {best_model_name}")
-plt.xlabel("FPR")
-plt.ylabel("TPR")
-plt.legend()
-plt.tight_layout()
-plt.savefig(f'./results/roc_curve_{best_model_name.lower().replace(" ", "_")}.png')
 
-precision, recall, _ = precision_recall_curve(y_test, y_proba)
-plt.figure(figsize=(7, 5))
-plt.plot(recall, precision, label='Precision-Recall Curve', color='green')
-plt.title(f"Precision-Recall Curve - {best_model_name}")
-plt.xlabel("Recall")
-plt.ylabel("Precision")
-plt.tight_layout()
-plt.savefig(f'./results/precision_recall_curve_{best_model_name.lower().replace(" ", "_")}.png')
+### Tenho que analizar como vai ficar
+# # --- 8. CURVAS DE AVALIAÇÃO VISUAL para o melhor modelo (exemplo LogReg) ---
+# best_model_name = "Logistic Regression"
+# best_model = modelo_logreg
+
+# y_proba = best_model.predict_proba(X_test)[:, 1]
+# fpr, tpr, _ = roc_curve(y_test, y_proba)
+# plt.figure(figsize=(7, 5))
+# plt.plot(fpr, tpr, label='ROC Curve')
+# plt.plot([0, 1], [0, 1], '--', color='gray')
+# plt.title(f"ROC Curve - {best_model_name}")
+# plt.xlabel("FPR")
+# plt.ylabel("TPR")
+# plt.legend()
+# plt.tight_layout()
+# plt.savefig(f'./results/roc_curve_{best_model_name.lower().replace(" ", "_")}.png')
+
+# precision, recall, _ = precision_recall_curve(y_test, y_proba)
+# plt.figure(figsize=(7, 5))
+# plt.plot(recall, precision, label='Precision-Recall Curve', color='green')
+# plt.title(f"Precision-Recall Curve - {best_model_name}")
+# plt.xlabel("Recall")
+# plt.ylabel("Precision")
+# plt.tight_layout()
+# plt.savefig(f'./results/precision_recall_curve_{best_model_name.lower().replace(" ", "_")}.png')
 
 # --- 9. IMPORTÂNCIA DAS FEATURES para Logistic Regression ---
 # print("Importância das features (coeficientes) - Logistic Regression:")
