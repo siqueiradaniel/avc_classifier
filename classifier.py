@@ -14,6 +14,7 @@ from sklearn.metrics import (
 )
 from imblearn.over_sampling import SMOTE
 from scipy.stats import shapiro
+import scipy.stats as st
 from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.stats.mstats import mquantiles
@@ -183,7 +184,13 @@ def avaliar_modelo_cv_nested(
     print("\nMÉTRICAS DE VALIDAÇÃO (Nested CV):")
     for metrica in scoring_metrics:
         valores = resultados[f'test_{metrica}']
-        print(f"{metrica}: {np.mean(valores):.4f} ± {np.std(valores):.4f}")
+        media = np.mean(valores)
+        desvio = np.std(valores, ddof=1)
+        n = len(valores)
+        z = st.t.ppf(0.975, df=n-1)  # 95% IC usando t-student
+        erro = z * (desvio / np.sqrt(n))
+        print(f"{metrica}: {media:.4f} ± {erro:.4f} (IC 95%)")
+
 
     # Treinamento final no conjunto completo de treino
     if ajustar and param_grid:
