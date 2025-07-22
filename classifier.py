@@ -1,14 +1,10 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
+
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import RobustScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.svm import SVC
-from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
 from sklearn.metrics import (
     classification_report, confusion_matrix, accuracy_score,
     roc_auc_score, roc_curve, precision_recall_curve,
@@ -17,10 +13,15 @@ from sklearn.metrics import (
 from imblearn.over_sampling import SMOTE
 from scipy.stats import shapiro
 from imblearn.pipeline import Pipeline as ImbPipeline
-
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.stats.mstats import mquantiles
 
+from sklearn.dummy import DummyClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
+from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from xgboost import XGBClassifier
 
@@ -161,7 +162,7 @@ def treinar_modelo_com_pipeline(
         melhor_modelo = grid.best_estimator_
         print(f"Melhores hiperparâmetros ({nome_modelo}): {grid.best_params_}")
     else:
-        print(f"Avaliando {nome_modelo} com cross-validation...")
+        print(f"Avaliando {nome_modelo} sem grid search...")
         pipeline.fit(X_train, y_train)
         melhor_modelo = pipeline
 
@@ -169,6 +170,18 @@ def treinar_modelo_com_pipeline(
     print("-" * 50)
     return melhor_modelo
 
+# Grid para Classificador Ingenuo
+modelo_dummy = treinar_modelo_com_pipeline(
+    nome_modelo="Classificador Ingenuo",
+    classificador=DummyClassifier(strategy="most_frequent", random_state=RANDOM_STATE),
+    usar_scaler=False,
+    usar_winsor=False,
+    usar_smote=False,
+    ajustar=False,
+    X_train=X_train,
+    y_train=y_train,
+    cv=cv
+)
 
 # Grid para Regressão Logística
 logreg_params = {
@@ -333,6 +346,7 @@ modelo_xgb = treinar_modelo_com_pipeline(
 
 # --- 7. AVALIAÇÃO FINAL NO CONJUNTO DE TESTE ---
 modelos = {
+    "Classificador Ingenuo": modelo_dummy,
     "Logistic Regression": modelo_logreg,
     "KNN": modelo_knn,
     "Decision Tree": modelo_dt,
