@@ -18,6 +18,9 @@ from imblearn.over_sampling import SMOTE
 from scipy.stats import shapiro
 from imblearn.pipeline import Pipeline as ImbPipeline
 
+from sklearn.base import BaseEstimator, TransformerMixin
+from scipy.stats.mstats import mquantiles
+
 import warnings
 warnings.filterwarnings("ignore")  # Para evitar warnings do GridSearch
 
@@ -68,6 +71,27 @@ print("-" * 50)
 # --- 6. VALIDAÇÃO CRUZADA + AJUSTE DE HIPERPARÂMETROS ---
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
 
+class Winsorizer(BaseEstimator, TransformerMixin):
+    def __init__(self, lower=0.01, upper=0.01, variables=None):
+        self.lower = lower
+        self.upper = upper
+        self.variables = variables
+        self.limits_ = {}
+
+    def fit(self, X, y=None):
+        self.limits_ = {
+            col: mquantiles(X[col], prob=[self.lower, 1 - self.upper])
+            for col in self.variables
+        }
+        return self
+
+    def transform(self, X):
+        X_copy = X.copy()
+        for col in self.variables:
+            low, high = self.limits_[col]
+            X_copy[col] = np.clip(X_copy[col], low, high)
+        return X_copy
+
 from sklearn.model_selection import cross_validate
 
 scoring_metrics = {
@@ -95,8 +119,9 @@ def avaliar_modelo_cv(modelo, X, y, nome_modelo):
 
 # Grid para Regressão Logística
 logreg_pipeline = ImbPipeline(steps=[
-    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('winsor', Winsorizer(variables=variaveis_numericas)),
     ('scaler', RobustScaler()),
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
     ('clf', LogisticRegression(random_state=RANDOM_STATE))
 ])
 
@@ -122,8 +147,9 @@ print("-" * 50)
 
 # Grid para KNN
 knn_pipeline = ImbPipeline(steps=[
-    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('winsor', Winsorizer(variables=variaveis_numericas)),
     ('scaler', RobustScaler()),
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
     ('clf', KNeighborsClassifier())
 ])
 
@@ -149,6 +175,7 @@ print("-" * 50)
 
 # Grid para Árvore de Decisão
 dt_pipeline = ImbPipeline(steps=[
+    ('winsor', Winsorizer(variables=variaveis_numericas)),
     ('smote', SMOTE(random_state=RANDOM_STATE)),
     ('clf', DecisionTreeClassifier(random_state=RANDOM_STATE))
 ])
@@ -173,16 +200,26 @@ print(f"Melhores hiperparâmetros (Decision Tree): {dt_grid.best_params_}")
 avaliar_modelo_cv(best_dt, X_train, y_train, "Decision Tree")
 print("-" * 50)
 
-# Grid para SVM (com probabilidade ativada para ROC)
+
+# Pipeline SVM com Winsorizer, SMOTE e Escalonamento
 '''
+svm_pipeline = ImbPipeline(steps=[
+    ('winsor', Winsorizer(variables=variaveis_numericas)),
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('scaler', RobustScaler()),
+    ('clf', SVC(random_state=RANDOM_STATE, probability=True))
+])
+
+# Espaço de busca dos hiperparâmetros
 svm_params = {
-    'C': [0.01, 0.1, 1, 10, 100],
-    'kernel': ['linear', 'rbf'],
-    'gamma': ['scale', 'auto']
+    'clf__C': [0.01, 0.1, 1, 10, 100],
+    'clf__kernel': ['linear', 'rbf'],
+    'clf__gamma': ['scale', 'auto']
 }
-svm_model = SVC(random_state=RANDOM_STATE, probability=True)
+
+# GridSearch com validação cruzada estratificada
 svm_grid = GridSearchCV(
-    estimator=svm_model,
+    estimator=svm_pipeline,
     param_grid=svm_params,
     cv=cv,
     scoring='balanced_accuracy',
@@ -190,6 +227,7 @@ svm_grid = GridSearchCV(
     verbose=1
 )
 
+# Treinamento e avaliação
 print("Executando GridSearchCV (SVM)...")
 svm_grid.fit(X_train, y_train)
 best_svm = svm_grid.best_estimator_
@@ -199,11 +237,19 @@ print("-" * 50)
 '''
 
 # Naive Bayes (não precisa de ajuste de hiperparâmetros)
-smote = SMOTE(random_state=RANDOM_STATE)
-X_train_nb, y_train_nb = smote.fit_resample(X_train, y_train)
-nb_model = GaussianNB()
-nb_model.fit(X_train_nb, y_train_nb)
-avaliar_modelo_cv(nb_model, X_train, y_train, "Naive Bayes")
+nb_pipeline = ImbPipeline(steps=[
+    ('winsor', Winsorizer(variables=variaveis_numericas)),
+    ('scaler', RobustScaler()),  # opcional, pode melhorar Naive Bayes
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('clf', GaussianNB())
+])
+
+print("Avaliando Naive Bayes com cross-validation...")
+avaliar_modelo_cv(nb_pipeline, X_train, y_train, "Naive Bayes")
+print("-" * 50)
+
+# Treina o pipeline completo no conjunto inteiro para avaliação final em teste
+nb_pipeline.fit(X_train, y_train)
 
 
 # --- 7. AVALIAÇÃO FINAL NO CONJUNTO DE TESTE ---
@@ -212,7 +258,7 @@ modelos = {
     "KNN": best_knn,
     "Decision Tree": best_dt,
     #"SVM": best_svm,
-    "Naive Bayes": nb_model
+    "Naive Bayes": nb_pipeline
 }
 
 print("Comparando modelos no conjunto de teste...\n")
