@@ -65,33 +65,34 @@ print(f"Tamanho do treino: {len(X_train)}")
 print(f"Tamanho do teste: {len(X_test)}")
 print("-" * 50)
 
+### Escalonamento será feito no pipeline
 # --- 4. ESCALONAMENTO ---
-num_cols = ['age', 'avg_glucose_level', 'bmi']  # ex: suas colunas numéricas
+# num_cols = ['age', 'avg_glucose_level', 'bmi']  # ex: suas colunas numéricas
 
-scaler = RobustScaler()
-X_train_num_scaled = scaler.fit_transform(X_train[num_cols])
-X_test_num_scaled = scaler.transform(X_test[num_cols])
+# scaler = RobustScaler()
+# X_train_num_scaled = scaler.fit_transform(X_train[num_cols])
+# X_test_num_scaled = scaler.transform(X_test[num_cols])
 
-# Mantém colunas categóricas intactas
-X_train_cat = X_train.drop(columns=num_cols).reset_index(drop=True)
-X_test_cat = X_test.drop(columns=num_cols).reset_index(drop=True)
+# # Mantém colunas categóricas intactas
+# X_train_cat = X_train.drop(columns=num_cols).reset_index(drop=True)
+# X_test_cat = X_test.drop(columns=num_cols).reset_index(drop=True)
 
-X_train_scaled = pd.concat([
-    pd.DataFrame(X_train_num_scaled, columns=num_cols),
-    X_train_cat.reset_index(drop=True)
-], axis=1)
+# X_train_scaled = pd.concat([
+#     pd.DataFrame(X_train_num_scaled, columns=num_cols),
+#     X_train_cat.reset_index(drop=True)
+# ], axis=1)
 
-X_test_scaled = pd.concat([
-    pd.DataFrame(X_test_num_scaled, columns=num_cols),
-    X_test_cat.reset_index(drop=True)
-], axis=1)
+# X_test_scaled = pd.concat([
+#     pd.DataFrame(X_test_num_scaled, columns=num_cols),
+#     X_test_cat.reset_index(drop=True)
+# ], axis=1)
 
 
 ### SMOTE deve ser usado dentro do pipeline
 # # --- 5. SMOTE APENAS NO TREINO ---
 # print(f"Antes do SMOTE:\n{y_train.value_counts()}")
 # smote = SMOTE(random_state=RANDOM_STATE)
-# X_train_resampled, y_train_resampled = smote.fit_resample(X_train_scaled, y_train)
+# X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
 # print(f"Após o SMOTE:\n{pd.Series(y_train_resampled).value_counts()}")
 # print("-" * 50)
 
@@ -119,7 +120,7 @@ logreg_grid = GridSearchCV(
 )
 
 print("Executando GridSearchCV (Logistic Regression)...")
-logreg_grid.fit(X_train_scaled, y_train)
+logreg_grid.fit(X_train, y_train)
 best_logreg = logreg_grid.best_estimator_
 print(f"Melhores hiperparâmetros (LogReg): {logreg_grid.best_params_}")
 print("-" * 50)
@@ -145,7 +146,7 @@ knn_grid = GridSearchCV(
 )
 
 print("Executando GridSearchCV (KNN)...")
-knn_grid.fit(X_train_scaled, y_train)
+knn_grid.fit(X_train, y_train)
 best_knn = knn_grid.best_estimator_
 print(f"Melhores hiperparâmetros (KNN): {knn_grid.best_params_}")
 print("-" * 50)
@@ -170,7 +171,7 @@ dt_grid = GridSearchCV(
 )
 
 print("Executando GridSearchCV (Decision Tree)...")
-dt_grid.fit(X_train_scaled, y_train)
+dt_grid.fit(X_train, y_train)
 best_dt = dt_grid.best_estimator_
 print(f"Melhores hiperparâmetros (Decision Tree): {dt_grid.best_params_}")
 print("-" * 50)
@@ -193,7 +194,7 @@ svm_grid = GridSearchCV(
 )
 
 print("Executando GridSearchCV (SVM)...")
-svm_grid.fit(X_train_scaled, y_train)
+svm_grid.fit(X_train, y_train)
 best_svm = svm_grid.best_estimator_
 print(f"Melhores hiperparâmetros (SVM): {svm_grid.best_params_}")
 print("-" * 50)
@@ -201,7 +202,7 @@ print("-" * 50)
 
 # Naive Bayes (não precisa de ajuste de hiperparâmetros)
 smote = SMOTE(random_state=RANDOM_STATE)
-X_train_nb, y_train_nb = smote.fit_resample(X_train_scaled, y_train)
+X_train_nb, y_train_nb = smote.fit_resample(X_train, y_train)
 nb_model = GaussianNB()
 nb_model.fit(X_train_nb, y_train_nb)
 
@@ -220,9 +221,9 @@ print("Comparando modelos no conjunto de teste...\n")
 resultados = []
 
 for nome, modelo in modelos.items():
-    y_pred = modelo.predict(X_test_scaled)
+    y_pred = modelo.predict(X_test)
     # Alguns modelos (NaiveBayes) podem não ter predict_proba, mas GaussianNB tem
-    y_proba = modelo.predict_proba(X_test_scaled)[:, 1] if hasattr(modelo, "predict_proba") else None
+    y_proba = modelo.predict_proba(X_test)[:, 1] if hasattr(modelo, "predict_proba") else None
 
     auc_roc = roc_auc_score(y_test, y_proba) if y_proba is not None else float('nan')
     avg_precision = average_precision_score(y_test, y_proba) if y_proba is not None else float('nan')
@@ -230,20 +231,20 @@ for nome, modelo in modelos.items():
     print(f"--- {nome} ---")
     print(f"Acurácia: {accuracy_score(y_test, y_pred):.4f}")
     print(f"Balanced Accuracy: {balanced_accuracy_score(y_test, y_pred):.4f}")
-    if y_proba is not None:
-        print(f"ROC AUC Score: {auc_roc:.4f}")
-        print(f"Average Precision (PR AUC): {avg_precision:.4f}")
-    print("\nMatriz de Confusão:")
-    print(confusion_matrix(y_test, y_pred))
-    print("\nRelatório de Classificação:")
-    print(classification_report(y_test, y_pred))
+    # if y_proba is not None:
+    #     print(f"ROC AUC Score: {auc_roc:.4f}")
+    #     print(f"Average Precision (PR AUC): {avg_precision:.4f}")
+    # print("\nMatriz de Confusão:")
+    # print(confusion_matrix(y_test, y_pred))
+    # print("\nRelatório de Classificação:")
+    # print(classification_report(y_test, y_pred))
     print("-" * 50)
 
 # --- 8. CURVAS DE AVALIAÇÃO VISUAL para o melhor modelo (exemplo LogReg) ---
 best_model_name = "Logistic Regression"
 best_model = best_logreg
 
-y_proba = best_model.predict_proba(X_test_scaled)[:, 1]
+y_proba = best_model.predict_proba(X_test)[:, 1]
 fpr, tpr, _ = roc_curve(y_test, y_proba)
 plt.figure(figsize=(7, 5))
 plt.plot(fpr, tpr, label='ROC Curve')
