@@ -1,7 +1,10 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
+from scipy.stats import wilcoxon
+from itertools import combinations
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
@@ -212,7 +215,7 @@ def avaliar_modelo_cv_nested(
 
     print("-" * 50)
 
-    return modelo_final
+    return modelo_final, resultados
 
 ### Nested
 # def avaliar_modelo_cv_nested(
@@ -338,7 +341,7 @@ def avaliar_modelo_cv_nested(
 #     return melhor_modelo
 
 # Grid para Classificador Ingenuo
-avaliar_modelo_cv_nested(
+dummy_model, dummy_results = avaliar_modelo_cv_nested(
     nome_modelo="Classificador Ingênuo",
     classificador=DummyClassifier(strategy="most_frequent", random_state=RANDOM_STATE),
     param_grid=None,
@@ -371,7 +374,7 @@ logreg_params = {
     'clf__solver': ['liblinear']
 }
 
-avaliar_modelo_cv_nested(
+logreg_model, logreg_results = avaliar_modelo_cv_nested(
     nome_modelo="Logistic Regression",
     classificador=LogisticRegression(random_state=RANDOM_STATE),
     param_grid=logreg_params,
@@ -401,7 +404,7 @@ knn_params = {
     'clf__metric': ['euclidean', 'manhattan']
 }
 
-avaliar_modelo_cv_nested(
+knn_model, knn_results = avaliar_modelo_cv_nested(
     nome_modelo="KNN",
     classificador=KNeighborsClassifier(),
     param_grid=knn_params,
@@ -431,7 +434,7 @@ dt_params = {
     'clf__min_samples_leaf': [1, 2, 4]
 }
 
-avaliar_modelo_cv_nested(
+dt_model, dt_results = avaliar_modelo_cv_nested(
     nome_modelo="Decision Tree",
     classificador=DecisionTreeClassifier(random_state=RANDOM_STATE),
     param_grid=dt_params,
@@ -462,7 +465,7 @@ svm_params = {
     'clf__gamma': ['scale', 'auto']
 }
 
-avaliar_modelo_cv_nested(
+svm_model, svm_results = avaliar_modelo_cv_nested(
     nome_modelo="SVM",
     classificador=SVC(
         random_state=RANDOM_STATE,
@@ -492,7 +495,7 @@ avaliar_modelo_cv_nested(
 # )
 
 # Naive Bayes (não precisa de ajuste de hiperparâmetros)
-avaliar_modelo_cv_nested(
+nb_model, nb_results = avaliar_modelo_cv_nested(
     nome_modelo="Naive Bayes",
     classificador=GaussianNB(),
     ajustar=False,  # sem grid search pois NB não precisa
@@ -521,7 +524,7 @@ rf_params = {
     'clf__min_samples_split': [2, 5]
 }
 
-avaliar_modelo_cv_nested(
+rf_model, rf_results = avaliar_modelo_cv_nested(
     nome_modelo="Random Forest",
     classificador=RandomForestClassifier(
         random_state=RANDOM_STATE,
@@ -558,7 +561,7 @@ ada_params = {
     'clf__learning_rate': [0.5, 1.0, 1.5]
 }
 
-avaliar_modelo_cv_nested(
+ada_model, ada_results = avaliar_modelo_cv_nested(
     nome_modelo="AdaBoost",
     classificador=AdaBoostClassifier(random_state=RANDOM_STATE),
     param_grid=ada_params,
@@ -588,7 +591,7 @@ xgb_params = {
     'clf__learning_rate': [0.01, 0.1, 0.2]
 }
 
-avaliar_modelo_cv_nested(
+xgb_model, xgb_results = avaliar_modelo_cv_nested(
     nome_modelo="XGBoost",
     classificador=XGBClassifier(
         random_state=RANDOM_STATE,
@@ -600,6 +603,44 @@ avaliar_modelo_cv_nested(
     X_test=X_test,
     y_test=y_test
 )
+
+# Criar um DataFrame com todas as acurácias balanceadas dos modelos
+df_plot = pd.DataFrame({
+    'Dummy': dummy_results['test_balanced_accuracy'],
+    'LogReg': logreg_results['test_balanced_accuracy'],
+    'KNN': knn_results['test_balanced_accuracy'],
+    'DecisionTree': dt_results['test_balanced_accuracy'],
+    'SVM': svm_results['test_balanced_accuracy'],
+    'NaiveBayes': nb_results['test_balanced_accuracy'],
+    'RandomForest': rf_results['test_balanced_accuracy'],
+    'AdaBoost': ada_results['test_balanced_accuracy'],
+    'XGBoost': xgb_results['test_balanced_accuracy']
+})
+
+# Transformar para formato longo (modelo, acurácia)
+df_long = df_plot.melt(var_name='Modelo', value_name='Balanced Accuracy')
+
+# Criar o boxplot
+plt.figure(figsize=(12, 6))
+sns.boxplot(data=df_long, x='Modelo', y='Balanced Accuracy')
+plt.xticks(rotation=45)
+plt.title('Boxplot de Acurácia Balanceada por Modelo (Nested CV)')
+plt.tight_layout()
+plt.savefig('./results/boxplot_todos_modelos.png')  # Salvar figura
+plt.close()
+
+model_names = df_plot.columns.tolist()
+pvals_matrix = pd.DataFrame(np.ones((len(model_names), len(model_names))), index=model_names, columns=model_names)
+
+for model1, model2 in combinations(model_names, 2):
+    stat, p = wilcoxon(df_plot[model1], df_plot[model2])
+    pvals_matrix.loc[model1, model2] = p
+    pvals_matrix.loc[model2, model1] = p  # matriz simétrica
+
+print("Matriz de p-values do teste Wilcoxon entre modelos:")
+print(pvals_matrix)
+
+
 
 # modelo_xgb = treinar_modelo_com_pipeline(
 #     nome_modelo="XGBoost",
