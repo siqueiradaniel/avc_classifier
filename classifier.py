@@ -21,6 +21,9 @@ from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.stats.mstats import mquantiles
 
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from xgboost import XGBClassifier
+
 import warnings
 warnings.filterwarnings("ignore")  # Para evitar warnings do GridSearch
 
@@ -252,13 +255,103 @@ print("-" * 50)
 nb_pipeline.fit(X_train, y_train)
 
 
+# Random Forest
+rf_pipeline = ImbPipeline(steps=[
+    ('winsor', Winsorizer(variables=variaveis_numericas)),
+    ('scaler', RobustScaler()),
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('clf', RandomForestClassifier(random_state=RANDOM_STATE))
+])
+
+rf_grid = GridSearchCV(
+    estimator=rf_pipeline,
+    param_grid={
+        'clf__n_estimators': [100, 200],
+        'clf__max_depth': [None, 10, 20],
+        'clf__min_samples_split': [2, 5]
+    },
+    cv=cv,
+    scoring='balanced_accuracy',
+    n_jobs=-1,
+    verbose=1
+)
+
+print("Executando GridSearchCV (Random Forest)...")
+rf_grid.fit(X_train, y_train)
+best_rf = rf_grid.best_estimator_
+print(f"Melhores hiperparâmetros (Random Forest): {rf_grid.best_params_}")
+avaliar_modelo_cv(best_rf, X_train, y_train, "Random Forest")
+print("-" * 50)
+
+
+
+# AdaBoost
+ada_pipeline = ImbPipeline(steps=[
+    ('winsor', Winsorizer(variables=variaveis_numericas)),
+    ('scaler', RobustScaler()),
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('clf', AdaBoostClassifier(random_state=RANDOM_STATE))
+])
+
+ada_grid = GridSearchCV(
+    estimator=ada_pipeline,
+    param_grid={
+        'clf__n_estimators': [50, 100],
+        'clf__learning_rate': [0.5, 1.0, 1.5]
+    },
+    cv=cv,
+    scoring='balanced_accuracy',
+    n_jobs=-1,
+    verbose=1
+)
+
+print("Executando GridSearchCV (AdaBoost)...")
+ada_grid.fit(X_train, y_train)
+best_ada = ada_grid.best_estimator_
+print(f"Melhores hiperparâmetros (AdaBoost): {ada_grid.best_params_}")
+avaliar_modelo_cv(best_ada, X_train, y_train, "AdaBoost")
+print("-" * 50)
+
+
+# XGBoost
+xgb_pipeline = ImbPipeline(steps=[
+    ('winsor', Winsorizer(variables=variaveis_numericas)),
+    ('scaler', RobustScaler()),
+    ('smote', SMOTE(random_state=RANDOM_STATE)),
+    ('clf', XGBClassifier(random_state=RANDOM_STATE, use_label_encoder=False, eval_metric='logloss'))
+])
+
+xgb_grid = GridSearchCV(
+    estimator=xgb_pipeline,
+    param_grid={
+        'clf__n_estimators': [100, 200],
+        'clf__max_depth': [3, 6],
+        'clf__learning_rate': [0.01, 0.1, 0.2]
+    },
+    cv=cv,
+    scoring='balanced_accuracy',
+    n_jobs=-1,
+    verbose=1
+)
+
+print("Executando GridSearchCV (XGBoost)...")
+xgb_grid.fit(X_train, y_train)
+best_xgb = xgb_grid.best_estimator_
+print(f"Melhores hiperparâmetros (XGBoost): {xgb_grid.best_params_}")
+avaliar_modelo_cv(best_xgb, X_train, y_train, "XGBoost")
+print("-" * 50)
+
+
 # --- 7. AVALIAÇÃO FINAL NO CONJUNTO DE TESTE ---
 modelos = {
     "Logistic Regression": best_logreg,
     "KNN": best_knn,
     "Decision Tree": best_dt,
     #"SVM": best_svm,
-    "Naive Bayes": nb_pipeline
+    "Naive Bayes": nb_pipeline,
+    "Random Florest": best_rf,
+    "AdaBoost": best_ada,
+    "XGBoost": best_xgb,
 }
 
 print("Comparando modelos no conjunto de teste...\n")
@@ -279,10 +372,10 @@ for nome, modelo in modelos.items():
     # if y_proba is not None:
     #     print(f"ROC AUC Score: {auc_roc:.4f}")
     #     print(f"Average Precision (PR AUC): {avg_precision:.4f}")
-    # print("\nMatriz de Confusão:")
-    # print(confusion_matrix(y_test, y_pred))
-    # print("\nRelatório de Classificação:")
-    # print(classification_report(y_test, y_pred))
+    print("\nMatriz de Confusão:")
+    print(confusion_matrix(y_test, y_pred))
+    #print("\nRelatório de Classificação:")
+    #print(classification_report(y_test, y_pred))
     print("-" * 50)
 
 # --- 8. CURVAS DE AVALIAÇÃO VISUAL para o melhor modelo (exemplo LogReg) ---
