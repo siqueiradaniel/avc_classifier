@@ -255,19 +255,17 @@ print("-" * 50)
 nb_pipeline.fit(X_train, y_train)
 
 
-# Random Forest
+# Random Forest (não é sensível a outliers nem a escalas)
 rf_pipeline = ImbPipeline(steps=[
-    ('winsor', Winsorizer(variables=variaveis_numericas)),
-    ('scaler', RobustScaler()),
     ('smote', SMOTE(random_state=RANDOM_STATE)),
-    ('clf', RandomForestClassifier(random_state=RANDOM_STATE))
+    ('clf', RandomForestClassifier(random_state=RANDOM_STATE, class_weight='balanced'))
 ])
 
 rf_grid = GridSearchCV(
     estimator=rf_pipeline,
     param_grid={
         'clf__n_estimators': [100, 200],
-        'clf__max_depth': [None, 10, 20],
+        'clf__max_depth': [None, 5, 10, 15, 20, 30],
         'clf__min_samples_split': [2, 5]
     },
     cv=cv,
@@ -282,7 +280,6 @@ best_rf = rf_grid.best_estimator_
 print(f"Melhores hiperparâmetros (Random Forest): {rf_grid.best_params_}")
 avaliar_modelo_cv(best_rf, X_train, y_train, "Random Forest")
 print("-" * 50)
-
 
 
 # AdaBoost
@@ -318,7 +315,7 @@ xgb_pipeline = ImbPipeline(steps=[
     ('winsor', Winsorizer(variables=variaveis_numericas)),
     ('scaler', RobustScaler()),
     ('smote', SMOTE(random_state=RANDOM_STATE)),
-    ('clf', XGBClassifier(random_state=RANDOM_STATE, use_label_encoder=False, eval_metric='logloss'))
+    ('clf', XGBClassifier(random_state=RANDOM_STATE, eval_metric='logloss'))
 ])
 
 xgb_grid = GridSearchCV(
@@ -349,7 +346,7 @@ modelos = {
     "Decision Tree": best_dt,
     #"SVM": best_svm,
     "Naive Bayes": nb_pipeline,
-    "Random Florest": best_rf,
+    "Random Forest": best_rf,
     "AdaBoost": best_ada,
     "XGBoost": best_xgb,
 }
