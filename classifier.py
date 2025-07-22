@@ -65,39 +65,33 @@ print(f"Tamanho do treino: {len(X_train)}")
 print(f"Tamanho do teste: {len(X_test)}")
 print("-" * 50)
 
-### Escalonamento será feito no pipeline
-# --- 4. ESCALONAMENTO ---
-# num_cols = ['age', 'avg_glucose_level', 'bmi']  # ex: suas colunas numéricas
-
-# scaler = RobustScaler()
-# X_train_num_scaled = scaler.fit_transform(X_train[num_cols])
-# X_test_num_scaled = scaler.transform(X_test[num_cols])
-
-# # Mantém colunas categóricas intactas
-# X_train_cat = X_train.drop(columns=num_cols).reset_index(drop=True)
-# X_test_cat = X_test.drop(columns=num_cols).reset_index(drop=True)
-
-# X_train_scaled = pd.concat([
-#     pd.DataFrame(X_train_num_scaled, columns=num_cols),
-#     X_train_cat.reset_index(drop=True)
-# ], axis=1)
-
-# X_test_scaled = pd.concat([
-#     pd.DataFrame(X_test_num_scaled, columns=num_cols),
-#     X_test_cat.reset_index(drop=True)
-# ], axis=1)
-
-
-### SMOTE deve ser usado dentro do pipeline
-# # --- 5. SMOTE APENAS NO TREINO ---
-# print(f"Antes do SMOTE:\n{y_train.value_counts()}")
-# smote = SMOTE(random_state=RANDOM_STATE)
-# X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
-# print(f"Após o SMOTE:\n{pd.Series(y_train_resampled).value_counts()}")
-# print("-" * 50)
-
 # --- 6. VALIDAÇÃO CRUZADA + AJUSTE DE HIPERPARÂMETROS ---
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+
+from sklearn.model_selection import cross_validate
+
+scoring_metrics = {
+    'balanced_accuracy': 'balanced_accuracy',
+    # 'precision': 'precision',
+    # 'recall': 'recall',
+    # 'f1': 'f1',
+    # 'roc_auc': 'roc_auc',
+    # 'average_precision': 'average_precision'
+}
+
+def avaliar_modelo_cv(modelo, X, y, nome_modelo):
+    print(f"\nAvaliação final por cross-validation - {nome_modelo}:")
+    resultados = cross_validate(
+        modelo, X, y,
+        cv=cv,
+        scoring=scoring_metrics,
+        return_train_score=False,
+        n_jobs=-1
+    )
+    for metrica in scoring_metrics:
+        valores = resultados[f'test_{metrica}']
+        print(f"{metrica}: {np.mean(valores):.4f} ± {np.std(valores):.4f}")
+
 
 # Grid para Regressão Logística
 logreg_pipeline = ImbPipeline(steps=[
@@ -123,6 +117,7 @@ print("Executando GridSearchCV (Logistic Regression)...")
 logreg_grid.fit(X_train, y_train)
 best_logreg = logreg_grid.best_estimator_
 print(f"Melhores hiperparâmetros (LogReg): {logreg_grid.best_params_}")
+avaliar_modelo_cv(best_logreg, X_train, y_train, "Logistic Regression")
 print("-" * 50)
 
 # Grid para KNN
@@ -149,6 +144,7 @@ print("Executando GridSearchCV (KNN)...")
 knn_grid.fit(X_train, y_train)
 best_knn = knn_grid.best_estimator_
 print(f"Melhores hiperparâmetros (KNN): {knn_grid.best_params_}")
+avaliar_modelo_cv(best_knn, X_train, y_train, "KNN")
 print("-" * 50)
 
 # Grid para Árvore de Decisão
@@ -174,6 +170,7 @@ print("Executando GridSearchCV (Decision Tree)...")
 dt_grid.fit(X_train, y_train)
 best_dt = dt_grid.best_estimator_
 print(f"Melhores hiperparâmetros (Decision Tree): {dt_grid.best_params_}")
+avaliar_modelo_cv(best_dt, X_train, y_train, "Decision Tree")
 print("-" * 50)
 
 # Grid para SVM (com probabilidade ativada para ROC)
@@ -197,6 +194,7 @@ print("Executando GridSearchCV (SVM)...")
 svm_grid.fit(X_train, y_train)
 best_svm = svm_grid.best_estimator_
 print(f"Melhores hiperparâmetros (SVM): {svm_grid.best_params_}")
+avaliar_modelo_cv(best_svm, X_train, y_train, "SVM")
 print("-" * 50)
 '''
 
@@ -205,6 +203,7 @@ smote = SMOTE(random_state=RANDOM_STATE)
 X_train_nb, y_train_nb = smote.fit_resample(X_train, y_train)
 nb_model = GaussianNB()
 nb_model.fit(X_train_nb, y_train_nb)
+avaliar_modelo_cv(nb_model, X_train, y_train, "Naive Bayes")
 
 
 # --- 7. AVALIAÇÃO FINAL NO CONJUNTO DE TESTE ---
