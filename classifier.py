@@ -170,7 +170,6 @@ def treinar_modelo_com_pipeline(
     return melhor_modelo
 
 
-
 # Grid para Regressão Logística
 logreg_params = {
     'clf__C': [0.01, 0.1, 1, 10, 100],
@@ -190,34 +189,6 @@ modelo_logreg = treinar_modelo_com_pipeline(
     y_train=y_train,
     cv=cv
 )
-
-
-# logreg_pipeline = ImbPipeline(steps=[
-#     ('winsor', Winsorizer(variables=variaveis_numericas)),
-#     ('scaler', RobustScaler()),
-#     ('smote', SMOTE(random_state=RANDOM_STATE)),
-#     ('clf', LogisticRegression(random_state=RANDOM_STATE))
-# ])
-
-# logreg_grid = GridSearchCV(
-#     estimator=logreg_pipeline,
-#     param_grid={
-#         'clf__C': [0.01, 0.1, 1, 10, 100],
-#         'clf__penalty': ['l2'],
-#         'clf__solver': ['liblinear']
-#     },
-#     cv=cv,
-#     scoring='balanced_accuracy',
-#     n_jobs=-1,
-#     verbose=1
-# )
-
-# print("Executando GridSearchCV (Logistic Regression)...")
-# logreg_grid.fit(X_train, y_train)
-# best_logreg = logreg_grid.best_estimator_
-# print(f"Melhores hiperparâmetros (LogReg): {logreg_grid.best_params_}")
-# avaliar_modelo_cv(best_logreg, X_train, y_train, "Logistic Regression")
-# print("-" * 50)
 
 # Grid para KNN
 knn_params = {
@@ -239,34 +210,6 @@ modelo_knn = treinar_modelo_com_pipeline(
     cv=cv
 )
 
-
-# knn_pipeline = ImbPipeline(steps=[
-#     ('winsor', Winsorizer(variables=variaveis_numericas)),
-#     ('scaler', RobustScaler()),
-#     ('smote', SMOTE(random_state=RANDOM_STATE)),
-#     ('clf', KNeighborsClassifier())
-# ])
-
-# knn_grid = GridSearchCV(
-#     estimator=knn_pipeline,
-#     param_grid={
-#         'clf__n_neighbors': range(3, 15, 2),
-#         'clf__weights': ['uniform', 'distance'],
-#         'clf__metric': ['euclidean', 'manhattan']
-#     },
-#     cv=cv,
-#     scoring='balanced_accuracy',
-#     n_jobs=-1,
-#     verbose=1
-# )
-
-# print("Executando GridSearchCV (KNN)...")
-# knn_grid.fit(X_train, y_train)
-# best_knn = knn_grid.best_estimator_
-# print(f"Melhores hiperparâmetros (KNN): {knn_grid.best_params_}")
-# avaliar_modelo_cv(best_knn, X_train, y_train, "KNN")
-# print("-" * 50)
-
 # Grid para Árvore de Decisão
 dt_params = {
     'clf__max_depth': [3, 5, 10, 15, 20, None],
@@ -286,33 +229,6 @@ modelo_dt = treinar_modelo_com_pipeline(
     y_train=y_train,
     cv=cv
 )
-
-# dt_pipeline = ImbPipeline(steps=[
-#     ('winsor', Winsorizer(variables=variaveis_numericas)),
-#     ('smote', SMOTE(random_state=RANDOM_STATE)),
-#     ('clf', DecisionTreeClassifier(random_state=RANDOM_STATE))
-# ])
-
-# dt_grid = GridSearchCV(
-#     estimator=dt_pipeline,
-#     param_grid={
-#         'clf__max_depth': [3, 5, 10, 15, 20, None],
-#         'clf__min_samples_split': [2, 5, 10],
-#         'clf__min_samples_leaf': [1, 2, 4]
-#     },
-#     cv=cv,
-#     scoring='balanced_accuracy',
-#     n_jobs=-1,
-#     verbose=1
-# )
-
-# print("Executando GridSearchCV (Decision Tree)...")
-# dt_grid.fit(X_train, y_train)
-# best_dt = dt_grid.best_estimator_
-# print(f"Melhores hiperparâmetros (Decision Tree): {dt_grid.best_params_}")
-# avaliar_modelo_cv(best_dt, X_train, y_train, "Decision Tree")
-# print("-" * 50)
-
 
 # Pipeline SVM com Winsorizer, SMOTE e Escalonamento
 svm_params = {
@@ -337,38 +253,6 @@ modelo_svm = treinar_modelo_com_pipeline(
     cv=cv
 )
 
-# svm_pipeline = ImbPipeline(steps=[
-#     ('winsor', Winsorizer(variables=variaveis_numericas)),
-#     ('smote', SMOTE(random_state=RANDOM_STATE)),
-#     ('scaler', RobustScaler()),
-#     ('clf', SVC(random_state=RANDOM_STATE, probability=True))
-# ])
-
-# # Espaço de busca dos hiperparâmetros
-# svm_params = {
-#     'clf__C': [0.01, 0.1, 1, 10, 100],
-#     'clf__kernel': ['linear', 'rbf'],
-#     'clf__gamma': ['scale', 'auto']
-# }
-
-# # GridSearch com validação cruzada estratificada
-# svm_grid = GridSearchCV(
-#     estimator=svm_pipeline,
-#     param_grid=svm_params,
-#     cv=cv,
-#     scoring='balanced_accuracy',
-#     n_jobs=-1,
-#     verbose=1
-# )
-
-# # Treinamento e avaliação
-# print("Executando GridSearchCV (SVM)...")
-# svm_grid.fit(X_train, y_train)
-# best_svm = svm_grid.best_estimator_
-# print(f"Melhores hiperparâmetros (SVM): {svm_grid.best_params_}")
-# avaliar_modelo_cv(best_svm, X_train, y_train, "SVM")
-# print("-" * 50)
-
 # Naive Bayes (não precisa de ajuste de hiperparâmetros)
 modelo_nb = treinar_modelo_com_pipeline(
     nome_modelo="Naive Bayes",
@@ -382,23 +266,7 @@ modelo_nb = treinar_modelo_com_pipeline(
     cv=cv
 )
 
-
-# nb_pipeline = ImbPipeline(steps=[
-#     ('winsor', Winsorizer(variables=variaveis_numericas)),
-#     ('scaler', RobustScaler()),  # opcional, pode melhorar Naive Bayes
-#     ('smote', SMOTE(random_state=RANDOM_STATE)),
-#     ('clf', GaussianNB())
-# ])
-
-# print("Avaliando Naive Bayes com cross-validation...")
-# avaliar_modelo_cv(nb_pipeline, X_train, y_train, "Naive Bayes")
-# print("-" * 50)
-
-# # Treina o pipeline completo no conjunto inteiro para avaliação final em teste
-# nb_pipeline.fit(X_train, y_train)
-
-
-# # Random Forest (não é sensível a outliers nem a escalas)
+# Random Forest (não é sensível a outliers nem a escalas)
 rf_params = {
     'clf__n_estimators': [100, 200],
     'clf__max_depth': [None, 5, 10, 15, 20, 30],
@@ -421,32 +289,6 @@ modelo_rf = treinar_modelo_com_pipeline(
     cv=cv
 )
 
-# rf_pipeline = ImbPipeline(steps=[
-#     ('smote', SMOTE(random_state=RANDOM_STATE)),
-#     ('clf', RandomForestClassifier(random_state=RANDOM_STATE, class_weight='balanced'))
-# ])
-
-# rf_grid = GridSearchCV(
-#     estimator=rf_pipeline,
-#     param_grid={
-#         'clf__n_estimators': [100, 200],
-#         'clf__max_depth': [None, 5, 10, 15, 20, 30],
-#         'clf__min_samples_split': [2, 5]
-#     },
-#     cv=cv,
-#     scoring='balanced_accuracy',
-#     n_jobs=-1,
-#     verbose=1
-# )
-
-# print("Executando GridSearchCV (Random Forest)...")
-# rf_grid.fit(X_train, y_train)
-# best_rf = rf_grid.best_estimator_
-# print(f"Melhores hiperparâmetros (Random Forest): {rf_grid.best_params_}")
-# avaliar_modelo_cv(best_rf, X_train, y_train, "Random Forest")
-# print("-" * 50)
-
-
 # AdaBoost
 ada_params = {
     'clf__n_estimators': [50, 100],
@@ -465,33 +307,6 @@ modelo_ada = treinar_modelo_com_pipeline(
     y_train=y_train,
     cv=cv
 )
-
-# ada_pipeline = ImbPipeline(steps=[
-#     ('winsor', Winsorizer(variables=variaveis_numericas)),
-#     ('scaler', RobustScaler()),
-#     ('smote', SMOTE(random_state=RANDOM_STATE)),
-#     ('clf', AdaBoostClassifier(random_state=RANDOM_STATE))
-# ])
-
-# ada_grid = GridSearchCV(
-#     estimator=ada_pipeline,
-#     param_grid={
-#         'clf__n_estimators': [50, 100],
-#         'clf__learning_rate': [0.5, 1.0, 1.5]
-#     },
-#     cv=cv,
-#     scoring='balanced_accuracy',
-#     n_jobs=-1,
-#     verbose=1
-# )
-
-# print("Executando GridSearchCV (AdaBoost)...")
-# ada_grid.fit(X_train, y_train)
-# best_ada = ada_grid.best_estimator_
-# print(f"Melhores hiperparâmetros (AdaBoost): {ada_grid.best_params_}")
-# avaliar_modelo_cv(best_ada, X_train, y_train, "AdaBoost")
-# print("-" * 50)
-
 
 # XGBoost
 xgb_params = {
@@ -515,34 +330,6 @@ modelo_xgb = treinar_modelo_com_pipeline(
     y_train=y_train,
     cv=cv
 )
-
-# xgb_pipeline = ImbPipeline(steps=[
-#     ('winsor', Winsorizer(variables=variaveis_numericas)),
-#     ('scaler', RobustScaler()),
-#     ('smote', SMOTE(random_state=RANDOM_STATE)),
-#     ('clf', XGBClassifier(random_state=RANDOM_STATE, eval_metric='logloss'))
-# ])
-
-# xgb_grid = GridSearchCV(
-#     estimator=xgb_pipeline,
-#     param_grid={
-#         'clf__n_estimators': [100, 200],
-#         'clf__max_depth': [3, 6],
-#         'clf__learning_rate': [0.01, 0.1, 0.2]
-#     },
-#     cv=cv,
-#     scoring='balanced_accuracy',
-#     n_jobs=-1,
-#     verbose=1
-# )
-
-# print("Executando GridSearchCV (XGBoost)...")
-# xgb_grid.fit(X_train, y_train)
-# best_xgb = xgb_grid.best_estimator_
-# print(f"Melhores hiperparâmetros (XGBoost): {xgb_grid.best_params_}")
-# avaliar_modelo_cv(best_xgb, X_train, y_train, "XGBoost")
-# print("-" * 50)
-
 
 # --- 7. AVALIAÇÃO FINAL NO CONJUNTO DE TESTE ---
 modelos = {
