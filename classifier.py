@@ -39,15 +39,21 @@ RANDOM_STATE = 42
 np.random.seed(RANDOM_STATE)
 
 # --- 1. CARREGAR O DATASET ---
-file_path = 'datasets/clean/healthcare-dataset-stroke-data-PROCESSADO.csv'
+file_path = 'datasets/healthcare-dataset-stroke-data.csv'
 
 try:
     df = pd.read_csv(file_path)
-    print("Dataset processado carregado com sucesso.")
+    print("Dataset bruto carregado com sucesso.")
     print("-" * 50)
 except FileNotFoundError:
     print(f"ERRO: O arquivo '{file_path}' não foi encontrado.")
     exit()
+
+# --- LIMPEZA INICIAL (OPERAÇÕES GLOBAIS) ---
+df.drop(columns=['id'], inplace=True)
+df = df[df['gender'] != 'Other']
+print(f"Limpeza inicial concluída. Linhas restantes: {len(df)}")
+print("-" * 50)
 
 
 # --- Checagem de normalidade nas variáveis numéricas ---
@@ -77,6 +83,67 @@ print("Conjuntos de treino e teste separados.")
 print(f"Tamanho do treino: {len(X_train)}")
 print(f"Tamanho do teste: {len(X_test)}")
 print("-" * 50)
+
+# --- 4. PRÉ-PROCESSAMENTO PÓS-DIVISÃO (NOVO) ---
+print("Iniciando pré-processamento pós-divisão (Padrão Ouro)...")
+
+# --- 4.1 IMPUTAÇÃO DE 'bmi' ---
+# A lógica é aprendida APENAS no X_train e aplicada em ambos
+
+# Criar a coluna auxiliar de faixa etária
+for df_temp in [X_train, X_test]:
+    df_temp['age_group'] = pd.cut(df_temp['age'], bins=range(0, 105, 5), right=False)
+
+# Aprender as medianas SOMENTE no treino
+imputation_map = X_train.groupby(['gender', 'age_group'], observed=True)['bmi'].median()
+global_bmi_median_train = X_train['bmi'].median()
+
+# Aplicar em ambos os conjuntos
+for df_temp in [X_train, X_test]:
+    df_temp['bmi'] = df_temp.groupby(['gender', 'age_group'], observed=True)['bmi'].transform(lambda x: x.fillna(imputation_map.get(x.name, global_bmi_median_train)))
+    df_temp['bmi'] = df_temp['bmi'].fillna(global_bmi_median_train)
+    df_temp['bmi'] = df_temp['bmi'].round(1)
+    df_temp.drop(columns=['age_group'], inplace=True)
+
+print("Imputação de 'bmi' concluída.")
+
+# --- 4.2 CODIFICAÇÃO DE VARIÁVEIS CATEGÓRICAS ---
+# Mapeamento de binárias
+for df_temp in [X_train, X_test]:
+    df_temp['gender'] = df_temp['gender'].map({'Male': 0, 'Female': 1})
+    df_temp['ever_married'] = df_temp['ever_married'].map({'No': 0, 'Yes': 1})
+    df_temp['Residence_type'] = df_temp['Residence_type'].map({'Rural': 0, 'Urban': 1})
+
+# One-Hot Encoding - Garantindo que ambos os conjuntos tenham as mesmas colunas
+# pd.get_dummies é mais simples aqui que o OneHotEncoder e podemos garantir a consistência
+# alinhando os dataframes após a codificação.
+X_train = pd.get_dummies(X_train, columns=['work_type', 'smoking_status'], prefix=['work_type', 'smoking_status'], dtype=int)
+X_test = pd.get_dummies(X_test, columns=['work_type', 'smoking_status'], prefix=['work_type', 'smoking_status'], dtype=int)
+
+# Alinhar colunas para garantir que o teste tenha as mesmas colunas que o treino
+train_cols = X_train.columns
+test_cols = X_test.columns
+
+missing_in_test = set(train_cols) - set(test_cols)
+for c in missing_in_test:
+    X_test[c] = 0
+
+missing_in_train = set(test_cols) - set(train_cols)
+for c in missing_in_train:
+    X_train[c] = 0
+
+X_test = X_test[train_cols] # Garante a mesma ordem de colunas
+
+print("Codificação de variáveis categóricas concluída.")
+
+# --- 4.3 CONVERSÃO FINAL DE TIPOS ---
+for df_temp in [X_train, X_test]:
+    df_temp['age'] = df_temp['age'].astype(int)
+    df_temp['gender'] = df_temp['gender'].astype(int)
+
+print("Conversão de tipos concluída.")
+print("-" * 50)
+
 
 # --- 6. VALIDAÇÃO CRUZADA + AJUSTE DE HIPERPARÂMETROS ---
 class Winsorizer(BaseEstimator, TransformerMixin):
