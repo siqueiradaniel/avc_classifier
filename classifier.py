@@ -32,13 +32,13 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from xgboost import XGBClassifier
 
 import warnings
-warnings.filterwarnings("ignore")  # Para evitar warnings do GridSearch
+warnings.filterwarnings("ignore")
 
-# --- FIXAR SEMENTES ---
+# Configuração da semente aleatória
 RANDOM_STATE = 42
 np.random.seed(RANDOM_STATE)
 
-# --- 1. CARREGAR O DATASET ---
+# Carregamento do dataset
 file_path = 'datasets/clean/healthcare-dataset-stroke-data-PROCESSADO.csv'
 
 try:
@@ -49,8 +49,7 @@ except FileNotFoundError:
     print(f"ERRO: O arquivo '{file_path}' não foi encontrado.")
     exit()
 
-
-# --- Checagem de normalidade nas variáveis numéricas ---
+# Teste de normalidade nas variáveis numéricas
 variaveis_numericas = ['age', 'avg_glucose_level', 'bmi']
 
 print("\nTeste de normalidade (Shapiro-Wilk):")
@@ -59,8 +58,7 @@ for col in variaveis_numericas:
     print(f"{col}: W = {stat:.4f}, p = {p:.4f} => {'Normal' if p > 0.05 else 'Não normal'}")
 print("-" * 50)
 
-
-# --- 2. SEPARAR FEATURES E ALVO ---
+# Separação de features e variável alvo
 X = df.drop('stroke', axis=1)
 y = df['stroke']
 
@@ -68,7 +66,7 @@ print(f"Formato de X: {X.shape}")
 print(f"Formato de y: {y.shape}")
 print("-" * 50)
 
-# --- 3. DIVISÃO EM TREINO/TESTE ---
+# Divisão em treino e teste
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y
 )
@@ -78,7 +76,7 @@ print(f"Tamanho do treino: {len(X_train)}")
 print(f"Tamanho do teste: {len(X_test)}")
 print("-" * 50)
 
-# --- 6. VALIDAÇÃO CRUZADA + AJUSTE DE HIPERPARÂMETROS ---
+# Classe personalizada para Winsorização (tratamento de outliers)
 class Winsorizer(BaseEstimator, TransformerMixin):
     def __init__(self, lower=0.01, upper=0.01, variables=None):
         self.lower = lower
@@ -100,18 +98,18 @@ class Winsorizer(BaseEstimator, TransformerMixin):
             X_copy[col] = np.clip(X_copy[col], low, high)
         return X_copy
 
+# Configuração das métricas de avaliação
 scoring_metrics = {
     'balanced_accuracy': 'balanced_accuracy',
-    #'f1': 'f1',
     'average_precision': 'average_precision',
 }
 
 metricas_sklearn = [
     balanced_accuracy_score,
-    #f1_score,
     average_precision_score
 ]
 
+# Função para construir pipelines de pré-processamento
 def construir_pipeline(
     classificador,
     usar_scaler=True,
@@ -133,6 +131,7 @@ def construir_pipeline(
     pipeline = ImbPipeline(steps=steps)
     return pipeline
 
+# Função principal para avaliação com Nested Cross-Validation
 def avaliar_modelo_cv_nested(
     nome_modelo,
     classificador,
@@ -149,7 +148,6 @@ def avaliar_modelo_cv_nested(
     outer_cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
 
     if ajustar and param_grid:
-        # Loop interno para ajuste de hiperparâmetros
         inner_cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
 
         pipeline = construir_pipeline(
@@ -167,7 +165,6 @@ def avaliar_modelo_cv_nested(
             n_jobs=-1
         )
     else:
-        # Sem ajuste, usamos o pipeline direto
         modelo_cv = construir_pipeline(
             classificador,
             usar_scaler=usar_scaler,
@@ -175,7 +172,6 @@ def avaliar_modelo_cv_nested(
             usar_smote=usar_smote
         )
 
-    # Avaliação com CV aninhada
     resultados = cross_validate(
         modelo_cv, X_train, y_train,
         cv=outer_cv,
@@ -190,12 +186,10 @@ def avaliar_modelo_cv_nested(
         media = np.mean(valores)
         desvio = np.std(valores, ddof=1)
         n = len(valores)
-        z = st.t.ppf(0.975, df=n-1)  # 95% IC usando t-student
+        z = st.t.ppf(0.975, df=n-1)
         erro = z * (desvio / np.sqrt(n))
         print(f"{metrica}: {media:.4f} ± {erro:.4f} (IC 95%)")
 
-
-    # Treinamento final no conjunto completo de treino
     if ajustar and param_grid:
         modelo_cv.fit(X_train, y_train)
         modelo_final = modelo_cv.best_estimator_
@@ -203,7 +197,6 @@ def avaliar_modelo_cv_nested(
         modelo_final = modelo_cv
         modelo_final.fit(X_train, y_train)
 
-    # Avaliação final no conjunto de teste
     y_pred = modelo_final.predict(X_test)
     print("\nMÉTRICAS NO CONJUNTO DE TESTE:")
     for nome, func in zip(scoring_metrics, metricas_sklearn):
@@ -217,7 +210,9 @@ def avaliar_modelo_cv_nested(
 
     return modelo_final, resultados
 
-# Grid para Classificador Ingenuo
+# Avaliação dos modelos de classificação
+
+# Classificador Ingênuo (baseline)
 dummy_model, dummy_results = avaliar_modelo_cv_nested(
     nome_modelo="Classificador Ingênuo",
     classificador=DummyClassifier(strategy="most_frequent", random_state=RANDOM_STATE),
@@ -232,7 +227,7 @@ dummy_model, dummy_results = avaliar_modelo_cv_nested(
     usar_smote=False,
 )
 
-# Grid para Regressão Logística
+# Regressão Logística
 logreg_params = {
     'clf__C': [0.01, 0.1, 1, 10, 100],
     'clf__penalty': ['l2'],
@@ -249,7 +244,7 @@ logreg_model, logreg_results = avaliar_modelo_cv_nested(
     y_test=y_test,
 )
 
-# Grid para KNN
+# K-Nearest Neighbors
 knn_params = {
     'clf__n_neighbors': range(3, 15, 2),
     'clf__weights': ['uniform', 'distance'],
@@ -266,7 +261,7 @@ knn_model, knn_results = avaliar_modelo_cv_nested(
     y_test=y_test,
 )
 
-# Grid para Árvore de Decisão
+# Árvore de Decisão
 dt_params = {
     'clf__max_depth': [3, 5, 10, 15, 20, None],
     'clf__min_samples_split': [2, 5, 10],
@@ -281,10 +276,10 @@ dt_model, dt_results = avaliar_modelo_cv_nested(
     y_train=y_train,
     X_test=X_test,
     y_test=y_test,
-    usar_scaler=False,  # árvores não precisam de scaler
+    usar_scaler=False,
 )
 
-# Pipeline SVM com Winsorizer, SMOTE e Escalonamento
+# Support Vector Machine
 svm_params = {
     'clf__C': [0.01, 0.1, 1, 10, 100],
     'clf__kernel': ['linear', 'rbf'],
@@ -296,7 +291,7 @@ svm_model, svm_results = avaliar_modelo_cv_nested(
     classificador=SVC(
         random_state=RANDOM_STATE,
         # probability=True 
-    ),  # probability=False por padrão, usar se precisar predict_proba
+    ),
     param_grid=svm_params,
     X_train=X_train,
     y_train=y_train,
@@ -304,18 +299,18 @@ svm_model, svm_results = avaliar_modelo_cv_nested(
     y_test=y_test,
 )
 
-# Naive Bayes (não precisa de ajuste de hiperparâmetros)
+# Naive Bayes
 nb_model, nb_results = avaliar_modelo_cv_nested(
     nome_modelo="Naive Bayes",
     classificador=GaussianNB(),
-    ajustar=False,  # sem grid search pois NB não precisa
+    ajustar=False,
     X_train=X_train,
     y_train=y_train,
     X_test=X_test,
     y_test=y_test
 )
 
-# Random Forest (não é sensível a outliers nem a escalas)
+# Random Forest
 rf_params = {
     'clf__n_estimators': [100, 200],
     'clf__max_depth': [None, 5, 10, 15, 20, 30],
@@ -329,8 +324,8 @@ rf_model, rf_results = avaliar_modelo_cv_nested(
         class_weight='balanced'
     ),
     param_grid=rf_params,
-    usar_scaler=False,     # não precisa para árvores
-    usar_winsor=False,     # idem
+    usar_scaler=False,
+    usar_winsor=False,
     X_train=X_train,
     y_train=y_train,
     X_test=X_test,
@@ -373,7 +368,9 @@ xgb_model, xgb_results = avaliar_modelo_cv_nested(
     y_test=y_test
 )
 
-# Criar um DataFrame com todas as acurácias balanceadas dos modelos
+# Análise comparativa dos resultados
+
+# Criação do DataFrame com resultados de acurácia balanceada
 df_plot = pd.DataFrame({
     'Dummy': dummy_results['test_balanced_accuracy'],
     'LogReg': logreg_results['test_balanced_accuracy'],
@@ -386,25 +383,26 @@ df_plot = pd.DataFrame({
     'XGBoost': xgb_results['test_balanced_accuracy']
 })
 
-# Transformar para formato longo (modelo, acurácia)
+# Transformação para formato longo
 df_long = df_plot.melt(var_name='Modelo', value_name='Balanced Accuracy')
 
-# Criar o boxplot
+# Geração do boxplot comparativo
 plt.figure(figsize=(12, 6))
 sns.boxplot(data=df_long, x='Modelo', y='Balanced Accuracy')
 plt.xticks(rotation=45)
 plt.title('Boxplot de Acurácia Balanceada por Modelo (Nested CV)')
 plt.tight_layout()
-plt.savefig('./results/boxplot_todos_modelos.png')  # Salvar figura
+plt.savefig('./results/boxplot_todos_modelos.png')
 plt.close()
 
+# Teste estatístico de Wilcoxon para comparação entre modelos
 model_names = df_plot.columns.tolist()
 pvals_matrix = pd.DataFrame(np.ones((len(model_names), len(model_names))), index=model_names, columns=model_names)
 
 for model1, model2 in combinations(model_names, 2):
     stat, p = wilcoxon(df_plot[model1], df_plot[model2])
     pvals_matrix.loc[model1, model2] = p
-    pvals_matrix.loc[model2, model1] = p  # matriz simétrica
+    pvals_matrix.loc[model2, model1] = p
 
 print("Matriz de p-values do teste Wilcoxon entre modelos:")
 print(pvals_matrix)
