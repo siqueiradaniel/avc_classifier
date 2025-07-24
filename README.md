@@ -77,48 +77,44 @@ Se preferir instalar manualmente, as principais bibliotecas utilizadas são:
   * `seaborn`
   * `scipy`
 
-Análise Exploratória de Dados (EDA) - Previsão de AVC 📊
+-----
+
+# Análise Exploratória de Dados (EDA) - Previsão de AVC 📊
 
 Este repositório contém scripts Python para uma Análise Exploratória de Dados (EDA) detalhada e multifacetada do conjunto de dados sobre Acidente Vascular Cerebral (AVC). O objetivo é investigar as relações entre as variáveis, identificar os principais fatores de risco e extrair insights que possam guiar a etapa de modelagem preditiva.
 
 A análise é dividida em duas abordagens complementares:
 
-Análise Estatística Profunda: Focada em testes de hipóteses e quantificação de associações.
+  * **Análise Estatística Profunda:** Focada em testes de hipóteses e quantificação de associações.
+  * **Visualização Bivariada Detalhada:** Focada na criação de gráficos individuais para cada variável, comparando a incidência de AVC contra uma linha de base geral.
 
-Visualização Bivariada Detalhada: Focada na criação de gráficos individuais para cada variável, comparando a incidência de AVC contra uma linha de base geral.
+## Principais Características e Análises
 
-Principais Características e Análises
 O projeto realiza uma investigação completa, cobrindo os seguintes pontos:
 
-Estatísticas Descritivas: Análise inicial de desbalanceamento de classes e valores ausentes.
+  * **Estatísticas Descritivas:** Análise inicial de desbalanceamento de classes e valores ausentes.
+  * **Testes Estatísticos Bivariados:**
+      * **Teste Qui-quadrado (χ²):** Para avaliar a associação entre variáveis categóricas (gênero, hipertensão, etc.) e a ocorrência de AVC. A força da associação é medida com o **V de Cramér**.
+      * **Teste Mann-Whitney U:** Para comparar as distribuições de variáveis numéricas (idade, glicose, IMC) entre os grupos com e sem AVC, ideal para dados não-normais.
+  * **Análise de Correlação:** Utiliza a correlação de **Spearman** para medir a força e a direção da relação monotônica entre as variáveis numéricas.
+  * **Análise de Risco Combinado:** Cria um `risk_score` para demonstrar como a combinação de fatores de risco (idade, hipertensão, doença cardíaca) impacta a probabilidade de AVC.
+  * **Visualização Padronizada:** Gera gráficos de barras para cada variável, mostrando o percentual de casos de AVC por categoria e uma linha de base (média geral de AVC), facilitando a identificação de grupos de risco.
 
-Testes Estatísticos Bivariados:
+## Como Usar
 
-Teste Qui-quadrado (χ²): Para avaliar a associação entre variáveis categóricas (gênero, hipertensão, etc.) e a ocorrência de AVC. A força da associação é medida com o V de Cramér.
-
-Teste Mann-Whitney U: Para comparar as distribuições de variáveis numéricas (idade, glicose, IMC) entre os grupos com e sem AVC, ideal para dados não-normais.
-
-Análise de Correlação: Utiliza a correlação de Spearman para medir a força e a direção da relação monotônica entre as variáveis numéricas.
-
-Análise de Risco Combinado: Cria um risk_score para demonstrar como a combinação de fatores de risco (idade, hipertensão, doença cardíaca) impacta a probabilidade de AVC.
-
-Visualização Padronizada: Gera gráficos de barras para cada variável, mostrando o percentual de casos de AVC por categoria e uma linha de base (média geral de AVC), facilitando a identificação de grupos de risco.
-
-Como Usar
-Tendo em vista que você já instalou as dependencias anteriormente, então execute o comando abaixo para gerar a análise dos dados:
+Tendo em vista que você já instalou as dependências anteriormente, então execute o comando abaixo para gerar a análise dos dados:
 
 ```bash
 # Para a análise estatística e gráficos de resumo
 python analisis.py
 ```
 
-Os resultados dos testes estatísticos serão impressos no console, e todos os gráficos gerados serão salvos na pasta analisis/.
+Os resultados dos testes estatísticos serão impressos no console, e todos os gráficos gerados serão salvos na pasta `analisis/`.
 
-Principais Insights e Visualizações 💡
+## Principais Insights e Visualizações 💡
+
 A execução dos scripts gera uma série de visualizações e relatórios estatísticos. Os principais insights incluem:
 
-Fatores de Risco Dominantes: Idade, hipertensão e doença cardíaca são os fatores mais fortemente associados a um maior risco de AVC.
-
-O Enigma do IMC (BMI): Embora estatisticamente significativo, o IMC por si só não é um forte discriminador. A análise mostra que a média de IMC não aumenta drasticamente com a idade, ao contrário da taxa de AVC, indicando que seu impacto é mais complexo.
-
-Efeito de Combinação: O risk_score demonstra claramente que a acumulação de fatores de risco eleva exponencialmente a probabilidade de um AVC.
+  * **Fatores de Risco Dominantes:** Idade, hipertensão e doença cardíaca são os fatores mais fortemente associados a um maior risco de AVC.
+  * **O Enigma do IMC (BMI):** Embora estatisticamente significativo, o IMC por si só não é um forte discriminador. A análise mostra que a média de IMC não aumenta drasticamente com a idade, ao contrário da taxa de AVC, indicando que seu impacto é mais complexo.
+  * **Efeito de Combinação:** O `risk_score` demonstra claramente que a acumulação de fatores de risco eleva exponencialmente a probabilidade de um AVC.
