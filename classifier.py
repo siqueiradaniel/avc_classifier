@@ -49,7 +49,7 @@ except FileNotFoundError:
     print(f"ERRO: O arquivo '{file_path}' não foi encontrado.")
     exit()
 
-# --- LIMPEZA INICIAL (OPERAÇÕES GLOBAIS) ---
+# --- LIMPEZA INICIAL  ---
 df.drop(columns=['id'], inplace=True)
 df = df[df['gender'] != 'Other']
 print(f"Limpeza inicial concluída. Linhas restantes: {len(df)}")
@@ -83,17 +83,17 @@ print(f"Tamanho do treino: {len(X_train)}")
 print(f"Tamanho do teste: {len(X_test)}")
 print("-" * 50)
 
-# --- 4. PRÉ-PROCESSAMENTO PÓS-DIVISÃO (NOVO) ---
+# --- PRÉ-PROCESSAMENTO PÓS-DIVISÃO ---
 print("Iniciando pré-processamento pós-divisão (Padrão Ouro)...")
 
-# --- 4.1 IMPUTAÇÃO DE 'bmi' ---
+# --- IMPUTAÇÃO DE 'bmi' ---
 # A lógica é aprendida APENAS no X_train e aplicada em ambos
 
 # Criar a coluna auxiliar de faixa etária
 for df_temp in [X_train, X_test]:
     df_temp['age_group'] = pd.cut(df_temp['age'], bins=range(0, 105, 5), right=False)
 
-# Aprender as medianas SOMENTE no treino
+# Aprender as medianas somente no treino
 imputation_map = X_train.groupby(['gender', 'age_group'], observed=True)['bmi'].median()
 global_bmi_median_train = X_train['bmi'].median()
 
@@ -106,7 +106,7 @@ for df_temp in [X_train, X_test]:
 
 print("Imputação de 'bmi' concluída.")
 
-# --- 4.2 CODIFICAÇÃO DE VARIÁVEIS CATEGÓRICAS ---
+# --- CODIFICAÇÃO DE VARIÁVEIS CATEGÓRICAS ---
 # Mapeamento de binárias
 for df_temp in [X_train, X_test]:
     df_temp['gender'] = df_temp['gender'].map({'Male': 0, 'Female': 1})
@@ -114,7 +114,6 @@ for df_temp in [X_train, X_test]:
     df_temp['Residence_type'] = df_temp['Residence_type'].map({'Rural': 0, 'Urban': 1})
 
 # One-Hot Encoding - Garantindo que ambos os conjuntos tenham as mesmas colunas
-# pd.get_dummies é mais simples aqui que o OneHotEncoder e podemos garantir a consistência
 # alinhando os dataframes após a codificação.
 X_train = pd.get_dummies(X_train, columns=['work_type', 'smoking_status'], prefix=['work_type', 'smoking_status'], dtype=int)
 X_test = pd.get_dummies(X_test, columns=['work_type', 'smoking_status'], prefix=['work_type', 'smoking_status'], dtype=int)
@@ -135,7 +134,7 @@ X_test = X_test[train_cols] # Garante a mesma ordem de colunas
 
 print("Codificação de variáveis categóricas concluída.")
 
-# --- 4.3 CONVERSÃO FINAL DE TIPOS ---
+# --- CONVERSÃO FINAL DE TIPOS ---
 for df_temp in [X_train, X_test]:
     df_temp['age'] = df_temp['age'].astype(int)
     df_temp['gender'] = df_temp['gender'].astype(int)
@@ -144,7 +143,7 @@ print("Conversão de tipos concluída.")
 print("-" * 50)
 
 
-# --- 6. VALIDAÇÃO CRUZADA + AJUSTE DE HIPERPARÂMETROS ---
+# --- VALIDAÇÃO CRUZADA + AJUSTE DE HIPERPARÂMETROS ---
 class Winsorizer(BaseEstimator, TransformerMixin):
     def __init__(self, lower=0.01, upper=0.01, variables=None):
         self.lower = lower
@@ -358,7 +357,7 @@ svm_model, svm_results = avaliar_modelo_cv_nested(
     nome_modelo="SVM",
     classificador=SVC(
         random_state=RANDOM_STATE,
-        # probability=True 
+        probability=True
     ),
     param_grid=svm_params,
     X_train=X_train,
